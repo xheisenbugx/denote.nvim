@@ -196,6 +196,9 @@ function M.open(opts)
   local line_targets = {}
 
   local function render()
+    if not vim.api.nvim_buf_is_valid(buf) then
+      return
+    end
     local matches = M.find(id, { dir = opts.dir, exclude_file = target_file })
     line_targets = {}
     local lines = {}
@@ -286,7 +289,8 @@ function M.open(opts)
       return
     end
     utils.open_file(target.file, how)
-    vim.api.nvim_win_set_cursor(0, { target.lnum, math.max(0, target.col - 1) })
+    local max_lnum = math.max(1, vim.api.nvim_buf_line_count(0))
+    vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(target.lnum, max_lnum)), math.max(0, target.col - 1) })
   end
 
   local map = function(lhs, fn, desc)

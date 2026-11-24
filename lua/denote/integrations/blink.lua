@@ -36,7 +36,8 @@ function M:get_completions(ctx, callback)
   local before = line:sub(1, col)
 
   -- Trigger when typing `denote:` or `[[denote:` or `](denote:`
-  if not before:match("denote:[%w%-_]*$") then
+  local match_start = before:find("denote:[%w%-_]*$")
+  if not match_start then
     callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = {} })
     return
   end
@@ -44,27 +45,17 @@ function M:get_completions(ctx, callback)
   local syntax = links.buffer_syntax(ctx.bufnr)
   local in_org_bracket = before:match("%[%[denote:[%w%-_]*$") ~= nil
   local in_md_paren = before:match("%]%(denote:[%w%-_]*$") ~= nil
+  local row0 = (ctx.cursor and ctx.cursor[1] or 1) - 1
 
   local items = {}
   for _, path in ipairs(files.list({ denote_only = true })) do
     local parsed = naming.parse_filename(path)
     if parsed.identifier then
       local title = frontmatter.extract_title(path)
-      local insert_text
-      if in_org_bracket then
-        insert_text = parsed.identifier .. "][" .. title .. "]]"
-      elseif in_md_paren then
-        insert_text = parsed.identifier .. ")"
-      else
-        insert_text = links.format_link(parsed.identifier, title, { syntax = syntax })
-      end
-
-      local kws = #parsed.keywords > 0 and ("[" .. table.concat(parsed.keywords, ", ") .. "]") or ""
-      items[#items + 1] = {
+      local item = {
         label = title .. " (" .. parsed.identifier .. ")",
         filterText = parsed.identifier .. " " .. title .. " " .. table.concat(parsed.keywords, " "),
-        insertText = insert_text,
-        detail = kws,
+        detail = #parsed.keywords > 0 and ("[" .. table.concat(parsed.keywords, ", ") .. "]") or "",
         kind = 17, -- File
         documentation = {
           kind = "markdown",
@@ -73,10 +64,24 @@ function M:get_completions(ctx, callback)
             title,
             parsed.identifier,
             parsed.filename,
-            kws ~= "" and kws or "(none)"
+            #parsed.keywords > 0 and ("[" .. table.concat(parsed.keywords, ", ") .. "]") or "(none)"
           ),
         },
       }
+      if in_org_bracket then
+        item.insertText = parsed.identifier .. "][" .. title .. "]]"
+      elseif in_md_paren then
+        item.insertText = parsed.identifier .. ")"
+      else
+        item.textEdit = {
+          newText = links.format_link(parsed.identifier, title, { syntax = syntax }),
+          range = {
+            start = { line = row0, character = match_start - 1 },
+            ["end"] = { line = row0, character = col },
+          },
+        }
+      end
+      items[#items + 1] = item
     end
   end
 

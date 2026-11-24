@@ -422,6 +422,8 @@ end
 ---@param opts? { dir?: string, id_only?: boolean }
 function M.link(opts)
   opts = opts or {}
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local seq_files = M.all_files(opts.dir)
   if #seq_files == 0 then
     utils.notify("No sequence notes found")
@@ -436,6 +438,10 @@ function M.link(opts)
     items = items,
     on_choice = function(chosen)
       if chosen[1] then
+        if vim.api.nvim_win_is_valid(origin_win) then
+          vim.api.nvim_set_current_win(origin_win)
+          pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+        end
         links.link({ target = chosen[1].value, id_only = opts.id_only })
       end
     end,

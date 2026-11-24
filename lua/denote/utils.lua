@@ -11,8 +11,7 @@ function M.normalize(path)
   if not path or path == "" then
     return ""
   end
-  local expanded = vim.fn.expand(path)
-  local norm = vim.fs.normalize(expanded)
+  local norm = vim.fs.normalize(path)
   if #norm > 1 then
     norm = norm:gsub("/+$", "")
   end
@@ -118,11 +117,21 @@ end
 ---@return integer|nil
 function M.find_buffer(path)
   local target = M.normalize(path)
+  local target_real = uv.fs_realpath(target)
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(bufnr) then
       local name = vim.api.nvim_buf_get_name(bufnr)
-      if name ~= "" and M.normalize(name) == target then
-        return bufnr
+      if name ~= "" then
+        local norm = M.normalize(name)
+        if norm == target then
+          return bufnr
+        end
+        if target_real then
+          local real = uv.fs_realpath(norm)
+          if real and real == target_real then
+            return bufnr
+          end
+        end
       end
     end
   end

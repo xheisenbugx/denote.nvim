@@ -37,6 +37,30 @@ describe("denote.silo", function()
       local detected_dir, detected_opts = silo.detect(work_dir .. "/some-file.org")
       eq(utils.normalize(work_dir), detected_dir)
       eq("org", detected_opts.file_type)
+
+      -- Async interactive silo.create_note preserves .denote.json overrides across vim.ui.input
+      local orig_input = vim.ui.input
+      local replies = { "Async Silo Org", "work" }
+      local idx = 0
+      vim.ui.input = function(_, cb)
+        idx = idx + 1
+        local val = replies[idx]
+        vim.schedule(function()
+          cb(val)
+        end)
+      end
+      silo.create_note(work_dir)
+      vim.wait(100, function()
+        return vim.api.nvim_buf_get_name(0):find("async%-silo%-org__work%.org$") ~= nil
+      end)
+      vim.ui.input = orig_input
+
+      local cur_name = vim.api.nvim_buf_get_name(0)
+      ok(cur_name:find("async%-silo%-org__work%.org$") ~= nil)
+      local cur_text = table.concat(buf_lines(0), "\n")
+      ok(cur_text:find("#+title:      Async Silo Org", 1, true) ~= nil)
+      -- Primary config still untouched
+      eq("markdown-yaml", config.opts.file_type)
     end)
   end)
 end)

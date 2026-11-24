@@ -571,10 +571,16 @@ function M.link_after_creating(opts)
           id_only = opts.id_only,
           file_path = new_path,
         })
-        local row = origin_pos[1] - 1
+        local row = math.max(0, math.min(origin_pos[1] - 1, vim.api.nvim_buf_line_count(origin_buf) - 1))
         local col = origin_pos[2]
         local line = vim.api.nvim_buf_get_lines(origin_buf, row, row + 1, false)[1] or ""
-        local ins = math.min(col, #line)
+        -- Insert AFTER the character under cursor (UTF-8 safe, matching nvim_put(..., "c", true))
+        local ins = 0
+        if #line > 0 then
+          local c0 = math.min(col, #line - 1)
+          local ok_u, utf_end = pcall(vim.str_utf_end, line, c0 + 1)
+          ins = math.min(c0 + 1 + (ok_u and utf_end or 0), #line)
+        end
         vim.api.nvim_buf_set_lines(
           origin_buf,
           row,
@@ -681,11 +687,15 @@ end
 function M.add_links(regexp, opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
+  local origin_lnum = vim.api.nvim_win_get_cursor(0)[1]
   local cur_path = utils.normalize(vim.api.nvim_buf_get_name(bufnr))
   local syntax = M.buffer_syntax(bufnr)
   local root = config.directory(opts.dir)
 
   local function insert_for(pat)
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return {}
+    end
     local matched = files.list({
       dir = root,
       denote_only = true,
@@ -715,7 +725,7 @@ function M.add_links(regexp, opts)
       out[#out + 1] = "- " .. M.format_link(id, desc, { syntax = syntax, id_only = opts.id_only, file_path = path })
     end
 
-    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    local lnum = math.min(origin_lnum, vim.api.nvim_buf_line_count(bufnr))
     vim.api.nvim_buf_set_lines(bufnr, lnum, lnum, false, out)
     return out
   end
@@ -777,6 +787,8 @@ end
 ---@param opts? { id_only?: boolean, dir?: string }
 function M.link_to_file_with_contents(query, opts)
   opts = opts or {}
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local function run(q)
     if not q or vim.trim(q) == "" then
       return
@@ -803,6 +815,10 @@ function M.link_to_file_with_contents(query, opts)
       items = items,
       on_choice = function(chosen)
         if chosen[1] then
+          if vim.api.nvim_win_is_valid(origin_win) then
+            vim.api.nvim_set_current_win(origin_win)
+            pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+          end
           M.link({ target = chosen[1].value, id_only = opts.id_only })
         end
       end,
@@ -827,11 +843,12 @@ end
 function M.link_to_all_files_with_contents(query, opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
+  local origin_lnum = vim.api.nvim_win_get_cursor(0)[1]
   local cur_path = utils.normalize(vim.api.nvim_buf_get_name(bufnr))
   local syntax = M.buffer_syntax(bufnr)
 
   local function run(q)
-    if not q or vim.trim(q) == "" then
+    if not vim.api.nvim_buf_is_valid(bufnr) or not q or vim.trim(q) == "" then
       return {}
     end
     local matches = require("denote.query").search_contents(vim.trim(q), { dir = opts.dir })
@@ -856,7 +873,7 @@ function M.link_to_all_files_with_contents(query, opts)
           .. M.format_link(id, M.default_description(p), { syntax = syntax, id_only = opts.id_only, file_path = p })
       end
     end
-    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    local lnum = math.min(origin_lnum, vim.api.nvim_buf_line_count(bufnr))
     vim.api.nvim_buf_set_lines(bufnr, lnum, lnum, false, out)
     return out
   end
@@ -876,6 +893,10 @@ end
 ---@param opts? { id_only?: boolean, dir?: string }
 function M.link_or_create_with_command(opts)
   opts = opts or {}
+  local origin_buf = vim.api.nvim_get_current_buf()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
+  local syntax = M.buffer_syntax(origin_buf)
   local commands = {
     { display = { { "note (default)", "DenoteTitle" } }, value = { "title", "keywords" } },
     { display = { { "type (choose file type)", "DenoteTitle" } }, value = { "file_type", "title", "keywords" } },
@@ -892,9 +913,6 @@ function M.link_or_create_with_command(opts)
       if not chosen[1] then
         return
       end
-      local origin_buf = vim.api.nvim_get_current_buf()
-      local origin_win = vim.api.nvim_get_current_win()
-      local syntax = M.buffer_syntax(origin_buf)
       create.note({
         dir = opts.dir,
         prompts = chosen[1].value,
@@ -903,6 +921,7 @@ function M.link_or_create_with_command(opts)
         on_created = function(new_path, meta)
           if vim.api.nvim_win_is_valid(origin_win) then
             vim.api.nvim_set_current_win(origin_win)
+            pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
           end
           local desc = meta.title ~= "" and meta.title or M.default_description(new_path)
           M.insert_text(

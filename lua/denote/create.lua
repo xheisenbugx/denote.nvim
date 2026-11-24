@@ -350,12 +350,32 @@ end
 ---@return table|nil
 function M.note(opts)
   opts = opts or {}
-  if opts.interactive == false or (opts.title ~= nil and opts.keywords ~= nil and not opts.prompts) then
-    return M.create_sync(opts)
+  local silo_dir = opts._silo_dir
+  local function finish(collected)
+    if silo_dir then
+      return require("denote.silo").with_silo(silo_dir, function()
+        return M.create_sync(collected)
+      end)
+    end
+    return M.create_sync(collected)
   end
-  local prompt_list = opts.prompts or config.opts.prompts or { "title", "keywords" }
+
+  if opts.interactive == false or (opts.title ~= nil and opts.keywords ~= nil and not opts.prompts) then
+    return finish(opts)
+  end
+
+  local prompt_list = opts.prompts
+  if not prompt_list then
+    if silo_dir then
+      local _, local_opts = require("denote.silo").detect(silo_dir)
+      prompt_list = (local_opts and local_opts.prompts) or config.opts.prompts or { "title", "keywords" }
+    else
+      prompt_list = config.opts.prompts or { "title", "keywords" }
+    end
+  end
+
   run_prompts(prompt_list, opts, function(collected)
-    M.create_sync(collected)
+    finish(collected)
   end)
 end
 

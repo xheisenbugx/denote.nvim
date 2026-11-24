@@ -19,6 +19,43 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+--- Re-entrancy guard preventing `auto_rename_on_save` from looping when rename writes a buffer.
+local renaming_bufs = {}
+
+--- Return true when `bufnr` is currently being written by `denote.rename`.
+---@param bufnr integer
+---@return boolean
+function M.is_renaming(bufnr)
+  return renaming_bufs[bufnr] == true
+end
+
+--- Save a loaded normal buffer through Neovim's `:silent write!` so `BF_NOTEDITED` is cleared,
+--- file mtime stays synced with Neovim (preventing `E13` / `Overwrite existing file` / `W11`),
+--- and `BufWritePost` hooks (org.reload, gitsigns, LSP) stay in sync.
+---@param bufnr integer
+---@param path string
+local function save_loaded_buffer(bufnr, path)
+  if not (bufnr and vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr)) then
+    return
+  end
+  if vim.bo[bufnr].buftype ~= "" then
+    return
+  end
+  renaming_bufs[bufnr] = true
+  local ok = pcall(vim.api.nvim_buf_call, bufnr, function()
+    vim.cmd("silent write!")
+  end)
+  renaming_bufs[bufnr] = nil
+  if not ok then
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    if utils.write_lines(path, lines) then
+      pcall(function()
+        vim.bo[bufnr].modified = false
+      end)
+    end
+  end
+end
+
 --- Check whether a confirmation key is enabled in `config.opts.rename_confirmations`.
 ---@param key string
 ---@return boolean
@@ -42,72 +79,98 @@ end
 --- without losing undo history or leaving a stale buffer behind.
 ---@param old_path string
 ---@param new_path string
----@return boolean, string|nil
+---@return boolean ok, string|nil err, boolean existed_on_disk
 local function rename_on_disk_and_buffer(old_path, new_path)
   local old_norm = utils.normalize(old_path)
   local new_norm = utils.normalize(new_path)
   if old_norm == new_norm then
-    return true, nil
+    return true, nil, utils.exists(old_norm)
   end
-  if utils.exists(new_norm) then
-    return false, "Target file already exists: " .. new_norm
+
+  local st_old = uv.fs_stat(old_norm)
+  local st_new = uv.fs_stat(new_norm)
+  local is_same_inode = st_old and st_new and st_old.ino and st_new.ino and st_old.ino == st_new.ino
+  local is_case_only = old_norm:lower() == new_norm:lower() and old_norm ~= new_norm
+  if st_new and not (is_case_only and is_same_inode) then
+    return false, "Target file already exists: " .. new_norm, false
   end
 
   local bufnr = utils.find_buffer(old_norm)
+  local existed_on_disk = st_old ~= nil
 
   -- If the file exists on disk, move it with uv.fs_rename
-  if utils.exists(old_norm) then
+  if existed_on_disk then
     local ok_mv, err = uv.fs_rename(old_norm, new_norm)
     if not ok_mv then
-      return false, "Failed to rename file: " .. tostring(err)
+      return false, "Failed to rename file: " .. tostring(err), false
     end
   end
 
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_buf_set_name(bufnr, new_norm)
-    -- Remove any phantom alternate buffer pointing at the old path
-    local old_buf = vim.fn.bufnr("^" .. vim.fn.escape(old_norm, "\\.*[]^$~/") .. "$")
-    if old_buf ~= -1 and old_buf ~= bufnr then
-      pcall(vim.api.nvim_buf_delete, old_buf, { force = true })
+    -- Wipe any stale unloaded buffer holding `new_norm` so `nvim_buf_set_name` never throws E95
+    local existing_target = utils.find_buffer(new_norm)
+    if existing_target and existing_target ~= bufnr and not vim.api.nvim_buf_is_loaded(existing_target) then
+      pcall(vim.api.nvim_buf_delete, existing_target, { force = true })
+    end
+
+    local ok_set, set_err = pcall(vim.api.nvim_buf_set_name, bufnr, new_norm)
+    if not ok_set then
+      -- Roll back disk rename if buffer rename failed
+      if existed_on_disk then
+        pcall(uv.fs_rename, new_norm, old_norm)
+      end
+      return false, "Failed to rename buffer: " .. tostring(set_err), false
+    end
+
+    -- Remove any phantom alternate buffer created by nvim_buf_set_name pointing at the old path
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if b ~= bufnr and vim.api.nvim_buf_is_valid(b) then
+        local bname = vim.api.nvim_buf_get_name(b)
+        if bname ~= "" and utils.normalize(bname) == old_norm then
+          pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+      end
     end
   end
 
-  return true, nil
+  return true, nil, existed_on_disk
 end
 
 --- Update front matter on either the loaded buffer or the file on disk.
 ---@param path string
 ---@param updates table
 ---@param add_if_missing? boolean
----@return boolean changed
-local function sync_front_matter(path, updates, add_if_missing)
+---@param force_save_loaded? boolean
+---@return boolean changed, boolean saved_loaded
+local function sync_front_matter(path, updates, add_if_missing, force_save_loaded)
   local ft = frontmatter.detect_file_type(path)
   if not ft then
-    return false
+    return false, false
   end
 
   local bufnr = utils.find_buffer(path)
   if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local new_lines, changed = frontmatter.rewrite_lines(lines, ft, updates, { add_if_missing = add_if_missing })
-    if changed then
+    local saved = false
+    if changed and vim.bo[bufnr].modifiable then
       vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, new_lines)
-      if utils.exists(path) then
-        utils.write_lines(path, new_lines)
-        vim.bo[bufnr].modified = false
-      end
     end
-    return changed
+    if (changed or force_save_loaded) and utils.exists(path) then
+      save_loaded_buffer(bufnr, path)
+      saved = true
+    end
+    return changed, saved
   else
     if not utils.exists(path) then
-      return false
+      return false, false
     end
     local lines = utils.read_lines(path)
     local new_lines, changed = frontmatter.rewrite_lines(lines, ft, updates, { add_if_missing = add_if_missing })
     if changed then
       utils.write_lines(path, new_lines)
     end
-    return changed
+    return changed, false
   end
 end
 
@@ -192,38 +255,51 @@ function M.rename_sync(opts)
   })
   local new_path = dir .. "/" .. new_name
 
+  local renamed_on_disk = false
   if new_path ~= path then
     if not confirm_action("modify_file_name", string.format("Rename %s -> %s?", parsed.filename, new_name)) then
       return path, nil
     end
-    local ok_mv, err = rename_on_disk_and_buffer(path, new_path)
+    local ok_mv, err, existed_on_disk = rename_on_disk_and_buffer(path, new_path)
     if not ok_mv then
       return nil, err
     end
+    renamed_on_disk = existed_on_disk
   end
 
+  local saved_loaded = false
   if opts.rewrite_front_matter ~= false and frontmatter.detect_file_type(new_path) then
     local fm_now = frontmatter.parse_file(new_path)
     local should_add = opts.add_front_matter == true
     if fm_now and fm_now.has_front_matter then
       if confirm_action("rewrite_front_matter", "Rewrite front matter in " .. new_name .. "?") then
-        sync_front_matter(new_path, {
+        local _, did_save = sync_front_matter(new_path, {
           title = title,
           keywords = keywords,
           signature = signature,
           identifier = id,
-        }, false)
+        }, false, renamed_on_disk)
+        saved_loaded = did_save
       end
     elseif should_add then
       if confirm_action("add_front_matter", "Add front matter to " .. new_name .. "?") then
-        sync_front_matter(new_path, {
+        local _, did_save = sync_front_matter(new_path, {
           title = title,
           keywords = keywords,
           signature = signature,
           identifier = id,
           date = ts or naming.identifier_to_time(id) or os.time(),
-        }, true)
+        }, true, renamed_on_disk)
+        saved_loaded = did_save
       end
+    end
+  end
+
+  -- Ensure a loaded buffer renamed on disk clears BF_NOTEDITED even when front matter was untouched
+  if renamed_on_disk and not saved_loaded then
+    local loaded_buf = utils.find_buffer(new_path)
+    if loaded_buf and vim.api.nvim_buf_is_loaded(loaded_buf) then
+      save_loaded_buffer(loaded_buf, new_path)
     end
   end
 
@@ -246,7 +322,8 @@ end
 
 --- Interactively rename a file (title, keywords, signature) matching `denote-rename-file`.
 ---@param file? string Target file path (default: current buffer)
-function M.rename_file(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil) Optional callback after completion
+function M.rename_file(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then
     utils.warn("Current buffer has no file name")
@@ -283,6 +360,9 @@ function M.rename_file(file)
         elseif new_path then
           utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
         end
+        if on_done then
+          on_done(new_path, err)
+        end
       end)
     end)
   end)
@@ -290,7 +370,8 @@ end
 
 --- Interactively rename only the title (`denote-rename-file-title`).
 ---@param file? string
-function M.rename_file_title(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil)
+function M.rename_file_title(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if path == "" then
     utils.warn("Current buffer has no file name")
@@ -309,12 +390,16 @@ function M.rename_file_title(file)
     elseif new_path then
       utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
     end
+    if on_done then
+      on_done(new_path, err)
+    end
   end)
 end
 
 --- Interactively rename only the keywords (`denote-rename-file-keywords`).
 ---@param file? string
-function M.rename_file_keywords(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil)
+function M.rename_file_keywords(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if path == "" then
     utils.warn("Current buffer has no file name")
@@ -331,12 +416,16 @@ function M.rename_file_keywords(file)
     elseif new_path then
       utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
     end
+    if on_done then
+      on_done(new_path, err)
+    end
   end)
 end
 
 --- Interactively rename only the signature (`denote-rename-file-signature`).
 ---@param file? string
-function M.rename_file_signature(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil)
+function M.rename_file_signature(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if path == "" then
     utils.warn("Current buffer has no file name")
@@ -353,12 +442,16 @@ function M.rename_file_signature(file)
     elseif new_path then
       utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
     end
+    if on_done then
+      on_done(new_path, err)
+    end
   end)
 end
 
 --- Interactively change the date / identifier (`denote-rename-file-date`).
 ---@param file? string
-function M.rename_file_date(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil)
+function M.rename_file_date(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if path == "" then
     utils.warn("Current buffer has no file name")
@@ -377,6 +470,9 @@ function M.rename_file_date(file)
         utils.error(err)
       elseif new_path then
         utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
+      end
+      if on_done then
+        on_done(new_path, err)
       end
     end
   )
@@ -536,7 +632,8 @@ end
 
 --- Interactively change the identifier directly (`denote-rename-file-identifier`).
 ---@param file? string
-function M.rename_file_identifier(file)
+---@param on_done? fun(new_path: string|nil, err: string|nil)
+function M.rename_file_identifier(file, on_done)
   local path = file or vim.api.nvim_buf_get_name(0)
   if path == "" then
     utils.warn("Current buffer has no file name")
@@ -560,6 +657,9 @@ function M.rename_file_identifier(file)
       utils.error(err)
     elseif new_path then
       utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
+    end
+    if on_done then
+      on_done(new_path, err)
     end
   end)
 end
@@ -639,9 +739,10 @@ function M.change_file_type_and_front_matter(file, new_file_type)
 
     local target_buf = utils.find_buffer(new_path)
     if target_buf and vim.api.nvim_buf_is_loaded(target_buf) then
-      vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, final_lines)
-      utils.write_lines(new_path, final_lines)
-      vim.bo[target_buf].modified = false
+      if vim.bo[target_buf].modifiable then
+        vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, final_lines)
+      end
+      save_loaded_buffer(target_buf, new_path)
       -- Re-detect Neovim filetype for the new extension
       pcall(vim.api.nvim_buf_call, target_buf, function()
         vim.cmd("filetype detect")

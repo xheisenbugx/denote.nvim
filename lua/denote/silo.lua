@@ -157,9 +157,7 @@ end
 ---@param silo_dir? string
 function M.create_note(silo_dir)
   local function run(dir)
-    M.with_silo(dir, function()
-      require("denote.create").note({ dir = dir })
-    end)
+    require("denote.create").note({ dir = dir, _silo_dir = dir })
   end
   if silo_dir then
     run(silo_dir)
@@ -172,9 +170,7 @@ end
 ---@param silo_dir? string
 function M.open_or_create(silo_dir)
   local function run(dir)
-    M.with_silo(dir, function()
-      require("denote.create").open_or_create({ dir = dir })
-    end)
+    require("denote.create").open_or_create({ dir = dir, _silo_dir = dir })
   end
   if silo_dir then
     run(silo_dir)

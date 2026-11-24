@@ -476,13 +476,16 @@ function M.parse_lines(lines, file_type)
 
   if file_type == "text" then
     local end_idx = nil
+    local has_key = false
     for i = 1, math.min(#lines, 30) do
       if lines[i]:match("^%-%-%-%-%-+%s*$") then
         end_idx = i
         break
+      elseif lines[i]:match("^[%w_%-]+:%s*") then
+        has_key = true
       end
     end
-    if not end_idx then
+    if not end_idx or not has_key then
       return res
     end
     res.has_front_matter = true

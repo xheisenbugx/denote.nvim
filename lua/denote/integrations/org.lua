@@ -56,7 +56,9 @@ function M.dblock_links(params, ctx)
   local id_only = params["id-only"] == true
   local include_date = params["include-date"] == true
 
-  local cur_path = ctx and ctx.bufnr and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr)) or ""
+  local cur_path = (ctx and ctx.bufnr and vim.api.nvim_buf_is_valid(ctx.bufnr))
+      and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr))
+    or ""
   local matched = files.list({
     denote_only = true,
     regexp = regexp,
@@ -145,7 +147,9 @@ function M.dblock_files(params, ctx)
   local add_links = params["add-links"] == true
   local sep = type(params["file-separator"]) == "string" and params["file-separator"] or "-----"
 
-  local cur_path = ctx and ctx.bufnr and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr)) or ""
+  local cur_path = (ctx and ctx.bufnr and vim.api.nvim_buf_is_valid(ctx.bufnr))
+      and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr))
+    or ""
   local matched = files.list({
     denote_only = true,
     text_only = true,
@@ -395,11 +399,15 @@ end
 --- Insert a `#+BEGIN: denote-links ... #+END:` block and populate it (`denote-org-dblock-insert-links`).
 ---@param regexp? string
 function M.dblock_insert_links(regexp)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local lnum = vim.api.nvim_win_get_cursor(0)[1]
   local function insert(pat)
-    local bufnr = vim.api.nvim_get_current_buf()
-    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+    local pos = math.min(lnum, vim.api.nvim_buf_line_count(bufnr))
     local header = string.format('#+BEGIN: denote-links :regexp "%s"', pat)
-    vim.api.nvim_buf_set_lines(bufnr, lnum, lnum, false, { header, "#+END:" })
+    vim.api.nvim_buf_set_lines(bufnr, pos, pos, false, { header, "#+END:" })
     M.update_dblocks(bufnr)
   end
   if regexp ~= nil then
@@ -424,11 +432,15 @@ end
 --- Insert a `#+BEGIN: denote-files ... #+END:` block and populate it (`denote-org-dblock-insert-files`).
 ---@param regexp? string
 function M.dblock_insert_files(regexp)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local lnum = vim.api.nvim_win_get_cursor(0)[1]
   local function insert(pat)
-    local bufnr = vim.api.nvim_get_current_buf()
-    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+    local pos = math.min(lnum, vim.api.nvim_buf_line_count(bufnr))
     local header = string.format('#+BEGIN: denote-files :regexp "%s" :no-front-matter t', pat)
-    vim.api.nvim_buf_set_lines(bufnr, lnum, lnum, false, { header, "#+END:" })
+    vim.api.nvim_buf_set_lines(bufnr, pos, pos, false, { header, "#+END:" })
     M.update_dblocks(bufnr)
   end
   if regexp ~= nil then

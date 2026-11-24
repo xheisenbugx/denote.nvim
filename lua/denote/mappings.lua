@@ -87,8 +87,8 @@ function M.attach_buffer(bufnr)
   if ft ~= "markdown" and ft ~= "md" and ft ~= "text" and ft ~= "org" then
     return
   end
-  -- In Org buffers when org.nvim is attached, org.nvim already handles <CR> via `links.types.denote`
-  if ft == "org" and require("denote.integrations.org").is_attached() then
+  -- In Org buffers when org.nvim is installed/attached, org.nvim handles <CR> via `links.types.denote`
+  if ft == "org" and (package.loaded["org"] or require("denote.integrations.org").is_attached()) then
     return
   end
 
@@ -100,7 +100,8 @@ function M.attach_buffer(bufnr)
     end
     if m.follow_link_fallback ~= false then
       local key = vim.api.nvim_replace_termcodes(lhs, true, false, true)
-      vim.api.nvim_feedkeys(key, "n", false)
+      local count = vim.v.count > 0 and tostring(vim.v.count) or ""
+      vim.api.nvim_feedkeys(count .. key, "n", false)
     end
   end, { buffer = bufnr, desc = "Denote: Follow link at cursor" })
 end
@@ -116,7 +117,7 @@ function M.setup_autocmds()
     end,
   })
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "FileType", "BufWritePost", "InsertLeave" }, {
+  vim.api.nvim_create_autocmd({ "BufEnter", "FileType" }, {
     group = augroup,
     callback = function(ev)
       local bufnr = ev.buf
@@ -137,15 +138,33 @@ function M.setup_autocmds()
     end,
   })
 
+  vim.api.nvim_create_autocmd({ "BufWritePost", "InsertLeave" }, {
+    group = augroup,
+    callback = function(ev)
+      local bufnr = ev.buf
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+      local ft = vim.bo[bufnr].filetype
+      if ft == "markdown" or ft == "md" or ft == "text" or ft == "org" then
+        ui.decorate_buffer(bufnr)
+      end
+    end,
+  })
+
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = augroup,
     callback = function(ev)
       if not config.opts.auto_rename_on_save then
         return
       end
+      local rename = require("denote.rename")
+      if rename.is_renaming(ev.buf) then
+        return
+      end
       local path = vim.api.nvim_buf_get_name(ev.buf)
       if path ~= "" and naming.is_denote_file(path) then
-        require("denote.rename").rename_file_using_front_matter(path)
+        rename.rename_file_using_front_matter(path)
       end
     end,
   })

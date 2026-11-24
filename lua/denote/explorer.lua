@@ -67,6 +67,9 @@ function M.open(opts)
   end
 
   local function render()
+    if not vim.api.nvim_buf_is_valid(buf) then
+      return
+    end
     local list = collect_files()
     state.rows = {}
     local lines, hls = {}, {}
@@ -148,7 +151,10 @@ function M.open(opts)
       end
     end
 
-    local cur_row = vim.api.nvim_win_get_cursor(0)[1]
+    local win = vim.fn.bufwinid(buf)
+    local has_win = win ~= -1 and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf
+    local cur_row = has_win and vim.api.nvim_win_get_cursor(win)[1] or 3
+
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
@@ -158,14 +164,44 @@ function M.open(opts)
       pcall(vim.api.nvim_buf_add_highlight, buf, ns, h[4], h[1], h[2], h[3])
     end
 
-    local max_row = vim.api.nvim_buf_line_count(buf)
-    vim.api.nvim_win_set_cursor(0, { math.max(3, math.min(cur_row, max_row)), 0 })
+    if has_win then
+      local max_row = vim.api.nvim_buf_line_count(buf)
+      local target_row = math.min(math.max(3, cur_row), math.max(1, max_row))
+      pcall(vim.api.nvim_win_set_cursor, win, { target_row, 0 })
+    end
   end
 
-  vim.cmd("enew")
   vim.api.nvim_win_set_buf(0, buf)
   render()
-  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  local init_win = vim.fn.bufwinid(buf)
+  if init_win ~= -1 and vim.api.nvim_win_is_valid(init_win) then
+    pcall(vim.api.nvim_win_set_cursor, init_win, { math.min(3, vim.api.nvim_buf_line_count(buf)), 0 })
+  end
+
+  -- Auto-refresh Explorer whenever a Denote note is renamed or created anywhere
+  local exp_augroup = vim.api.nvim_create_augroup("denote_explorer_" .. buf, { clear = true })
+  vim.api.nvim_create_autocmd("User", {
+    group = exp_augroup,
+    pattern = { "DenoteRenameFile", "DenoteNewNote" },
+    callback = function(ev)
+      if not vim.api.nvim_buf_is_valid(buf) then
+        pcall(vim.api.nvim_del_augroup_by_id, exp_augroup)
+        return
+      end
+      if ev.data and ev.data.old_path and state.marked[ev.data.old_path] then
+        state.marked[ev.data.old_path] = nil
+      end
+      vim.schedule(render)
+    end,
+  })
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    group = exp_augroup,
+    buffer = buf,
+    once = true,
+    callback = function()
+      pcall(vim.api.nvim_del_augroup_by_id, exp_augroup)
+    end,
+  })
 
   local function current_file()
     return state.rows[vim.api.nvim_win_get_cursor(0)[1]]
@@ -362,8 +398,13 @@ function M.open(opts)
       return
     end
     if #targets == 1 then
-      rename.rename_file(targets[1])
-      vim.schedule(render)
+      local target = targets[1]
+      rename.rename_file(target, function(new_path)
+        if new_path then
+          state.marked[target] = nil
+        end
+        render()
+      end)
       return
     end
     -- Batch actions on marked files (matching denote-dired-rename-marked-files*)
@@ -468,7 +509,15 @@ function M.open(opts)
   end, "toggle denote-only / all files")
 
   map("g", render, "refresh")
-  map("q", "<Cmd>bwipeout<CR>", "close explorer")
+  map("q", function()
+    local win = vim.fn.bufwinid(buf)
+    if win ~= -1 and vim.api.nvim_win_is_valid(win) and origin_buf ~= buf and vim.api.nvim_buf_is_valid(origin_buf) then
+      pcall(vim.api.nvim_win_set_buf, win, origin_buf)
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    end
+  end, "close explorer")
   map("g?", function()
     require("denote.ui").show_help("Denote Explorer", {
       { "<CR> / o / v / s", "Open note (current / other / vsplit / split)" },

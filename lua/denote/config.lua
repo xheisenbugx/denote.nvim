@@ -200,8 +200,11 @@ function M.directory(dir)
   if type(raw) == "function" then
     raw = raw()
   end
-  local expanded = vim.fn.expand(raw)
-  return (vim.fs.normalize(expanded):gsub("/+$", ""))
+  local norm = vim.fs.normalize(raw)
+  if #norm > 1 then
+    norm = norm:gsub("/+$", "")
+  end
+  return norm
 end
 
 return M

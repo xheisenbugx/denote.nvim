@@ -100,4 +100,77 @@ describe("denote.rename", function()
       eq("20261123T150000", fm.identifier)
     end)
   end)
+
+  it("preserves full note content and allows normal :write after renaming loaded buffers", function()
+    with_temp_dir(function(dir)
+      denote.setup({ directory = dir, file_type = "org", mappings = { enabled = false } })
+      local meta = denote.create_sync({
+        title = "Something",
+        keywords = { "neovim", "org" },
+        date = "2026-11-24 10:58:45",
+        open = true,
+        save = true,
+      })
+      local buf = meta.bufnr
+      vim.api.nvim_buf_set_lines(buf, -1, -1, false, { "* Heading", "Important body text!", "Second line." })
+      vim.cmd("silent write")
+
+      local new_path, err = denote.rename_sync({
+        file = meta.path,
+        title = "Renamed Something",
+        keywords = { "neovim", "org" },
+      })
+      eq(nil, err)
+      eq(false, utils.exists(meta.path))
+      ok(utils.is_file(new_path))
+
+      -- Both buffer and disk keep full body content
+      local disk = utils.read_lines(new_path)
+      local joined = table.concat(disk, "\n")
+      ok(joined:find("#+title:      Renamed Something", 1, true) ~= nil)
+      ok(joined:find("Important body text!", 1, true) ~= nil)
+      ok(joined:find("Second line.", 1, true) ~= nil)
+      eq(disk, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+
+      -- Subsequent normal :write succeeds without E13 / overwrite prompt
+      vim.api.nvim_buf_set_lines(buf, -1, -1, false, { "Third line after rename." })
+      local ok_w, werr = pcall(vim.api.nvim_buf_call, buf, function()
+        vim.cmd("silent write")
+      end)
+      eq(true, ok_w)
+      eq(nil, werr)
+      ok(table.concat(utils.read_lines(new_path), "\n"):find("Third line after rename.", 1, true) ~= nil)
+    end)
+  end)
+
+  it("supports case-only renames when preserve_case is enabled and safe path normalization", function()
+    with_temp_dir(function(dir)
+      denote.setup({ directory = dir, file_type = "org", preserve_case = true, mappings = { enabled = false } })
+      local meta = denote.create_sync({
+        title = "myNote",
+        keywords = { "org" },
+        date = "2026-11-24 11:00:00",
+        open = true,
+        save = true,
+      })
+      vim.api.nvim_buf_set_lines(meta.bufnr, -1, -1, false, { "* Keep me" })
+      vim.cmd("silent write")
+
+      local new_path, err = denote.rename_sync({
+        file = meta.path,
+        title = "MyNote",
+        keywords = { "org" },
+      })
+      eq(nil, err)
+      eq("20261124T110000--MyNote__org.org", vim.fn.fnamemodify(new_path, ":t"))
+      ok(table.concat(utils.read_lines(new_path), "\n"):find("* Keep me", 1, true) ~= nil)
+
+      -- Path normalization must not expand %, #, or glob brackets
+      eq("/tmp/foo#bar%1[2].org", utils.normalize("/tmp/foo#bar%1[2].org"))
+
+      -- Plain .txt file with a horizontal rule and no key: value header has no front matter
+      local parsed_txt = frontmatter.parse_lines({ "Just a paragraph", "----------", "More text" }, "text")
+      eq(false, parsed_txt.has_front_matter)
+    end)
+  end)
 end)

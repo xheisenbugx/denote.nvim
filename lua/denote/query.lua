@@ -217,6 +217,9 @@ function M.grep(query, opts)
     end
 
     local function render()
+      if not vim.api.nvim_buf_is_valid(buf) then
+        return
+      end
       local shown = filtered_matches()
       line_targets = {}
       local lines, hls = {}, {}
@@ -309,7 +312,8 @@ function M.grep(query, opts)
         return
       end
       utils.open_file(t.file, how)
-      vim.api.nvim_win_set_cursor(0, { t.lnum, math.max(0, t.col - 1) })
+      local max_lnum = math.max(1, vim.api.nvim_buf_line_count(0))
+      vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(t.lnum, max_lnum)), math.max(0, t.col - 1) })
     end
 
     local map = function(lhs, fn, desc)
@@ -479,9 +483,15 @@ end
 ---@param description? string
 function M.query_contents_link(query, description)
   local bufnr = vim.api.nvim_get_current_buf()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = links.buffer_syntax(bufnr)
   local function insert(q, desc)
     local text = links.format_link("query-contents:" .. q, desc or q, { syntax = syntax })
+    if vim.api.nvim_win_is_valid(origin_win) then
+      vim.api.nvim_set_current_win(origin_win)
+      pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+    end
     links.insert_text(text, bufnr)
   end
 
@@ -506,9 +516,15 @@ end
 ---@param description? string
 function M.query_filenames_link(query, description)
   local bufnr = vim.api.nvim_get_current_buf()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = links.buffer_syntax(bufnr)
   local function insert(q, desc)
     local text = links.format_link("query-filenames:" .. q, desc or q, { syntax = syntax })
+    if vim.api.nvim_win_is_valid(origin_win) then
+      vim.api.nvim_set_current_win(origin_win)
+      pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+    end
     links.insert_text(text, bufnr)
   end
 
