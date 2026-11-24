@@ -14,6 +14,7 @@ File-naming scheme · Org & Markdown · Backlinks · Query links · Explorer · 
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-orange?style=for-the-badge)](#-contributing)
 
 **[Install](#-install-in-30-seconds)** ·
+**[Tour](#-a-quick-tour)** ·
 **[Quick start](#-quick-start)** ·
 **[Features](#-features)** ·
 **[Org & Markdown](#-org-mode-orgnvim--markdown)** ·
@@ -21,6 +22,10 @@ File-naming scheme · Org & Markdown · Backlinks · Query links · Explorer · 
 **[Configuration](#-configuration)** ·
 **[Manual](doc/denote.txt)** ·
 **[Contributing](#-contributing)**
+
+<br>
+
+<img src="https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/hero.gif" alt="Browsing the Denote Explorer, creating a note, inserting and following an immutable denote: link, and inspecting backlinks" width="900">
 
 </div>
 
@@ -90,6 +95,48 @@ Restart Neovim and run `:checkhealth denote` to verify your directory, picker ba
 
 > [!TIP]
 > All global Denote keymaps live under `<leader>n` by default. If another plugin already uses it, change `mappings = { prefix = "<leader>N" }` or disable them with `mappings = { enabled = false }`. Inside Explorer, Backlinks, and Query buffers, press `g?` anytime for a keymap cheatsheet.
+
+---
+
+## 🎬 A quick tour
+
+Recorded in a standalone Neovim from the VHS tapes in [`docs/media/tapes`](docs/media/tapes) (config: [`docs/media/demo/init.lua`](docs/media/demo/init.lua)). The box in the bottom-right corner shows the key being pressed. All GIFs are hosted on the orphan [`media`](https://github.com/xheisenbugx/denote.nvim/tree/media) branch so installing the plugin stays lightweight.
+
+### Creating notes & two-way front matter sync
+
+`<leader>nn` creates a note with its timestamp identifier, slugified filename, and front matter. Edit the title or tags directly inside the file and press `<leader>nR` to sync the filename on disk — or press `<leader>nk` / `<leader>nr` to update both at once.
+
+![Creating a note, editing front matter, syncing the filename on disk with rename_from_front_matter, and adding a keyword](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/create-and-rename.gif)
+
+### Immutable links, heading links & backlinks
+
+`<leader>nh` links directly to a specific heading (`::#heading-slug` in Markdown, `::#custom-id` or `::*Heading` in Org), `<CR>` jumps right to it, and `<leader>nb` opens an interactive backlinks split across both `.md` and `.org` notes (`f` toggles matching context vs filenames-only).
+
+![Inserting a heading link via fuzzy picker, jumping straight to the heading, opening the backlinks split, toggling context mode, and jumping to a linking note](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/links-and-backlinks.gif)
+
+### Interactive Denote Explorer
+
+`<leader>ne` opens a colorized Dired-style buffer (`denote-sort-dired` / `denote-menu`): sort naturally by Folgezettel signature (`S`), reverse order (`r`), filter by keyword (`k`) or regexp (`/`), mark notes for batch renaming (`m` + `R`), and press `g?` for all explorer keymaps.
+
+![Sorting the Denote Explorer by Folgezettel signature, filtering by keyword, marking files, and opening the keymap help float](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/explorer.gif)
+
+### Full-text grep & Denote 4.0 live query links
+
+`<leader>ng` runs a fast full-text search into a live narrowing buffer (`f` keep matching, `x` exclude, `c` clear). `<leader>nqc` inserts a `denote:query-contents:` link that re-executes the search whenever you press `<CR>` on it.
+
+![Searching notes with Denote grep, narrowing results live, inserting a query-contents link, and executing it with Enter](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/grep-and-query.gif)
+
+### First-class `org.nvim` integration
+
+When paired with [xheisenbugx/org.nvim](https://github.com/xheisenbugx/org.nvim), `denote.nvim` registers the native `denote:` link type and Org dynamic blocks (`denote-links`, `denote-backlinks`, `denote-files`). Links render with `org.nvim` concealment, `<CR>` jumps straight to `:CUSTOM_ID:` headings, `:Denote dblock_update` populates dynamic index blocks live, and backlinks span `.org` and `.md` notes seamlessly.
+
+![Following a denote:ID::#custom-id link in org.nvim, populating a denote-links dynamic block, and inspecting cross-format backlinks](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/org-integration.gif)
+
+### Folgezettel sequences & daily journal
+
+Browse sequence relatives (`<leader>nzr` — parent, siblings, children), spawn the next child in an alphanumeric or numeric tree (`<leader>nzc` → `1a2`), and open or create today's journal entry in one press (`<leader>nj`).
+
+![Browsing Folgezettel sequence relatives, creating the next child sequence note 1a2, and opening today's journal entry](https://raw.githubusercontent.com/xheisenbugx/denote.nvim/media/journal-and-sequences.gif)
 
 ---
 

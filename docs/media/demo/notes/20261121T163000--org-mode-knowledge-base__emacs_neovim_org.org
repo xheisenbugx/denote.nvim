@@ -1,0 +1,20 @@
+#+title:      Org mode knowledge base
+#+date:       [2026-11-21 Sat 16:30]
+#+filetags:   :emacs:neovim:org:
+#+identifier: 20261121T163000
+
+Using =denote.nvim= together with =org.nvim= lets Org files participate in
+the exact same naming scheme, backlinks graph, and live queries.
+
+* Architecture
+:PROPERTIES:
+:CUSTOM_ID: org-architecture
+:END:
+
+- Immutable links: [[denote:20261118T091500][Plain-text note taking with Denote]]
+- Direct heading links: [[denote:20261122T101000::#dynamic-blocks][Org dynamic blocks in Denote]]
+
+* Dynamic index
+
+#+BEGIN: denote-links :regexp "_emacs" :sort-by-component title
+#+END:

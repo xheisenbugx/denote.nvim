@@ -132,7 +132,9 @@ local function pick_snacks(spec)
         chosen[#chosen + 1] = s._denote_item
       end
     end
-    spec.on_choice(chosen, query, how)
+    vim.schedule(function()
+      spec.on_choice(chosen, query, how)
+    end)
   end
 
   _G.Snacks.picker.pick({
@@ -154,7 +156,9 @@ local function pick_snacks(spec)
         handled = true
         local query = picker.input and picker.input:get() or ""
         picker:close()
-        spec.on_choice({}, query, "edit")
+        vim.schedule(function()
+          spec.on_choice({}, query, "edit")
+        end)
       end,
       denote_split = function(picker)
         finish(picker, "split")

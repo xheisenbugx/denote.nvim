@@ -1,4 +1,4 @@
-.PHONY: test lint format docs
+.PHONY: test lint format docs media publish-media
 
 test:
 	@d=$$(mktemp -d) && XDG_DATA_HOME=$$d XDG_CACHE_HOME=$$d/cache nvim --headless -u tests/minimal_init.lua -l tests/run.lua $(SPEC); \
@@ -12,3 +12,29 @@ format:
 
 docs:
 	nvim --headless --clean -c "helptags doc" -c "qa!"
+
+# Re-record the README GIFs (needs vhs and BlexMono Nerd Font; see docs/media/README.md).
+media:
+	@for t in docs/media/tapes/*.tape; do \
+	  case $$t in */common.tape) ;; *) vhs $$t & ;; esac; \
+	done; wait
+
+# Commit the recorded GIFs in docs/media to the orphan `media` branch and push it.
+publish-media:
+	@set -e; \
+	git fetch -q origin media 2>/dev/null || true; \
+	d=$$(mktemp -d); \
+	if git rev-parse --verify origin/media >/dev/null 2>&1; then \
+	  git worktree add -q --detach $$d origin/media; \
+	else \
+	  git worktree add -q --orphan -b media $$d; \
+	fi; \
+	for f in docs/media/*.gif docs/media/*.png; do if [ -e "$$f" ]; then cp "$$f" $$d/; fi; done; \
+	git -C $$d add -A; \
+	if git -C $$d diff --cached --quiet; then \
+	  echo "media: nothing new to publish"; \
+	else \
+	  git -C $$d commit -q -m "docs(media): update README demo GIFs" && git -C $$d push -q origin HEAD:media; \
+	fi; \
+	git worktree remove --force $$d
+

@@ -65,11 +65,14 @@ function M.search_contents(query, opts)
       for _, p in ipairs(candidates) do
         allowed[utils.normalize(p)] = true
       end
+      local seen_line = {}
       for line in res.stdout:gmatch("[^\r\n]+") do
         local fpath, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
         if fpath then
           local norm = utils.normalize(fpath)
-          if allowed[norm] then
+          local key = norm .. ":" .. lnum
+          if allowed[norm] and not seen_line[key] then
+            seen_line[key] = true
             matches[#matches + 1] = {
               file = norm,
               lnum = tonumber(lnum) or 1,

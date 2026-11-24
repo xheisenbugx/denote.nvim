@@ -1,0 +1,20 @@
+#+title:      Org dynamic blocks in Denote
+#+date:       [2026-11-22 Sun 10:10]
+#+filetags:   :emacs:org:
+#+identifier: 20261122T101000
+
+* Overview
+
+Dynamic blocks build metanotes automatically from your Denote directory.
+
+* Dynamic blocks
+:PROPERTIES:
+:CUSTOM_ID: dynamic-blocks
+:END:
+
+Supported writers:
+- =denote-links= — live list of matching notes
+- =denote-backlinks= — live list of backlinks to this note
+- =denote-files= — embed matching notes inline
+
+See [[denote:20261121T163000::#org-architecture][Org mode knowledge base::Architecture]].
