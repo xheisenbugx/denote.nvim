@@ -1,4 +1,4 @@
-.PHONY: test lint format docs bench media publish-media
+.PHONY: test lint format docs bench media publish-media fixtures
 
 test:
 	@d=$$(mktemp -d) && XDG_DATA_HOME=$$d XDG_CACHE_HOME=$$d/cache nvim --headless -u tests/minimal_init.lua -l tests/run.lua $(SPEC); \
@@ -13,6 +13,12 @@ format:
 # Benchmark against a generated vault: make bench N=10000
 bench:
 	@nvim --headless -u tests/minimal_init.lua -l scripts/bench.lua $(N)
+
+# Regenerate the Emacs Denote golden fixtures (tests/fixtures/emacs) with the real Denote.
+# Denote is installed from GNU ELPA into .cache/emacs-fixtures (never ~/.emacs.d).
+EMACS ?= emacs
+fixtures:
+	LC_ALL=C LANG=C $(EMACS) --batch -Q -l scripts/emacs-fixtures/generate.el
 
 docs:
 	nvim --headless --clean -c "helptags doc" -c "qa!"

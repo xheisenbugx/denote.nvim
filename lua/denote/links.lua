@@ -119,11 +119,10 @@ function M.format_link(target, description, opts)
     return string.format("[[denote:%s][%s]]", target, desc)
   elseif syntax == "markdown" then
     local style = config.opts.markdown_link_style or "denote"
-    if id_only then
-      if style == "wiki" then
-        return string.format("[[denote:%s]]", target)
-      end
-      return string.format("[%s](denote:%s)", target, target)
+    -- Like Emacs `denote-format-link`: ID-only links (or links without a description) use
+    -- `denote-id-only-link-format` (`[[denote:ID]]`) in every file type, Markdown included.
+    if id_only or ((not description or description == "") and style ~= "relative") then
+      return string.format("[[denote:%s]]", target)
     end
     if style == "wiki" then
       return string.format("[[denote:%s|%s]]", target, desc)

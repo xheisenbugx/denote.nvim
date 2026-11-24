@@ -1,0 +1,1257 @@
+{
+  "generator": "scripts/emacs-fixtures/generate.el",
+  "denote_version": "4.3.1",
+  "tz": "Asia/Kolkata",
+  "notes": [
+    {
+      "name": "basic",
+      "input": {
+        "title": "Hello World",
+        "keywords": [
+          "emacs",
+          "neovim"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--hello-world__emacs_neovim.org",
+          "contents": "#+title:      Hello World\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :emacs:neovim:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--hello-world__emacs_neovim.md",
+          "contents": "---\ntitle:      \"Hello World\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"emacs\", \"neovim\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--hello-world__emacs_neovim.md",
+          "contents": "+++\ntitle      = \"Hello World\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"emacs\", \"neovim\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--hello-world__emacs_neovim.txt",
+          "contents": "title:      Hello World\ndate:       2024-03-05\ntags:       emacs  neovim\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "no-keywords",
+      "input": {
+        "title": "Just a title",
+        "keywords": [],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--just-a-title.org",
+          "contents": "#+title:      Just a title\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--just-a-title.md",
+          "contents": "---\ntitle:      \"Just a title\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--just-a-title.md",
+          "contents": "+++\ntitle      = \"Just a title\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--just-a-title.txt",
+          "contents": "title:      Just a title\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "empty-title",
+      "input": {
+        "title": "",
+        "keywords": [
+          "journal"
+        ],
+        "signature": "",
+        "date": 1735669800
+      },
+      "outputs": {
+        "org": {
+          "filename": "20250101T000000__journal.org",
+          "contents": "#+title:      \n#+date:       [2025-01-01 Wed 00:00]\n#+filetags:   :journal:\n#+identifier: 20250101T000000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20250101T000000__journal.md",
+          "contents": "---\ntitle:      \"\"\ndate:       2025-01-01T00:00:00+05:30\ntags:       [\"journal\"]\nidentifier: \"20250101T000000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20250101T000000__journal.md",
+          "contents": "+++\ntitle      = \"\"\ndate       = 2025-01-01T00:00:00+05:30\ntags       = [\"journal\"]\nidentifier = \"20250101T000000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20250101T000000__journal.txt",
+          "contents": "title:      \ndate:       2025-01-01\ntags:       journal\nidentifier: 20250101T000000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "only-identifier",
+      "input": {
+        "title": "",
+        "keywords": [],
+        "signature": "",
+        "date": 1735669800
+      },
+      "outputs": {
+        "org": {
+          "filename": "20250101T000000.org",
+          "contents": "#+title:      \n#+date:       [2025-01-01 Wed 00:00]\n#+filetags:   \n#+identifier: 20250101T000000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20250101T000000.md",
+          "contents": "---\ntitle:      \"\"\ndate:       2025-01-01T00:00:00+05:30\ntags:       []\nidentifier: \"20250101T000000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20250101T000000.md",
+          "contents": "+++\ntitle      = \"\"\ndate       = 2025-01-01T00:00:00+05:30\ntags       = []\nidentifier = \"20250101T000000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20250101T000000.txt",
+          "contents": "title:      \ndate:       2025-01-01\ntags:       \nidentifier: 20250101T000000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "signature",
+      "input": {
+        "title": "Sequence note",
+        "keywords": [
+          "zettel"
+        ],
+        "signature": "1a2",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709==1a2--sequence-note__zettel.org",
+          "contents": "#+title:      Sequence note\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :zettel:\n#+identifier: 20240305T140709\n#+signature:  1a2\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709==1a2--sequence-note__zettel.md",
+          "contents": "---\ntitle:      \"Sequence note\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"zettel\"]\nidentifier: \"20240305T140709\"\nsignature:  \"1a2\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709==1a2--sequence-note__zettel.md",
+          "contents": "+++\ntitle      = \"Sequence note\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"zettel\"]\nidentifier = \"20240305T140709\"\nsignature  = \"1a2\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709==1a2--sequence-note__zettel.txt",
+          "contents": "title:      Sequence note\ndate:       2024-03-05\ntags:       zettel\nidentifier: 20240305T140709\nsignature:  1a2\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "signature-only",
+      "input": {
+        "title": "",
+        "keywords": [],
+        "signature": "draft",
+        "date": 1782889200
+      },
+      "outputs": {
+        "org": {
+          "filename": "20260701T123000==draft.org",
+          "contents": "#+title:      \n#+date:       [2026-07-01 Wed 12:30]\n#+filetags:   \n#+identifier: 20260701T123000\n#+signature:  draft\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20260701T123000==draft.md",
+          "contents": "---\ntitle:      \"\"\ndate:       2026-07-01T12:30:00+05:30\ntags:       []\nidentifier: \"20260701T123000\"\nsignature:  \"draft\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20260701T123000==draft.md",
+          "contents": "+++\ntitle      = \"\"\ndate       = 2026-07-01T12:30:00+05:30\ntags       = []\nidentifier = \"20260701T123000\"\nsignature  = \"draft\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20260701T123000==draft.txt",
+          "contents": "title:      \ndate:       2026-07-01\ntags:       \nidentifier: 20260701T123000\nsignature:  draft\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "signature-words",
+      "input": {
+        "title": "Signed",
+        "keywords": [
+          "x"
+        ],
+        "signature": "Draft Two_Final",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709==draft=two=final--signed__x.org",
+          "contents": "#+title:      Signed\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :x:\n#+identifier: 20240305T140709\n#+signature:  draft=two=final\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709==draft=two=final--signed__x.md",
+          "contents": "---\ntitle:      \"Signed\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"x\"]\nidentifier: \"20240305T140709\"\nsignature:  \"draft=two=final\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709==draft=two=final--signed__x.md",
+          "contents": "+++\ntitle      = \"Signed\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"x\"]\nidentifier = \"20240305T140709\"\nsignature  = \"draft=two=final\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709==draft=two=final--signed__x.txt",
+          "contents": "title:      Signed\ndate:       2024-03-05\ntags:       x\nidentifier: 20240305T140709\nsignature:  draft=two=final\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "signature-punctuation",
+      "input": {
+        "title": "Signed",
+        "keywords": [],
+        "signature": "A.B-C (v2)",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709==abc=v2--signed.org",
+          "contents": "#+title:      Signed\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n#+signature:  abc=v2\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709==abc=v2--signed.md",
+          "contents": "---\ntitle:      \"Signed\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\nsignature:  \"abc=v2\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709==abc=v2--signed.md",
+          "contents": "+++\ntitle      = \"Signed\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\nsignature  = \"abc=v2\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709==abc=v2--signed.txt",
+          "contents": "title:      Signed\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\nsignature:  abc=v2\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-punctuation",
+      "input": {
+        "title": "Hello, World! (draft) #1 & more?",
+        "keywords": [
+          "misc"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--hello-world-draft-1-more__misc.org",
+          "contents": "#+title:      Hello, World! (draft) #1 & more?\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :misc:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--hello-world-draft-1-more__misc.md",
+          "contents": "---\ntitle:      \"Hello, World! (draft) #1 & more?\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"misc\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--hello-world-draft-1-more__misc.md",
+          "contents": "+++\ntitle      = \"Hello, World! (draft) #1 & more?\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"misc\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--hello-world-draft-1-more__misc.txt",
+          "contents": "title:      Hello, World! (draft) #1 & more?\ndate:       2024-03-05\ntags:       misc\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-quotes-backslash",
+      "input": {
+        "title": "He said \"hi\" \\ back",
+        "keywords": [],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--he-said-hi-\\-back.org",
+          "contents": "#+title:      He said \"hi\" \\ back\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--he-said-hi-\\-back.md",
+          "contents": "---\ntitle:      \"He said \\\"hi\\\" \\\\ back\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--he-said-hi-\\-back.md",
+          "contents": "+++\ntitle      = \"He said \\\"hi\\\" \\\\ back\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--he-said-hi-\\-back.txt",
+          "contents": "title:      He said \"hi\" \\ back\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-unicode-accents",
+      "input": {
+        "title": "Café Über straße",
+        "keywords": [
+          "français"
+        ],
+        "signature": "",
+        "date": 1782889200
+      },
+      "outputs": {
+        "org": {
+          "filename": "20260701T123000--café-über-straße__français.org",
+          "contents": "#+title:      Café Über straße\n#+date:       [2026-07-01 Wed 12:30]\n#+filetags:   :français:\n#+identifier: 20260701T123000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20260701T123000--café-über-straße__français.md",
+          "contents": "---\ntitle:      \"Café Über straße\"\ndate:       2026-07-01T12:30:00+05:30\ntags:       [\"français\"]\nidentifier: \"20260701T123000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20260701T123000--café-über-straße__français.md",
+          "contents": "+++\ntitle      = \"Café Über straße\"\ndate       = 2026-07-01T12:30:00+05:30\ntags       = [\"français\"]\nidentifier = \"20260701T123000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20260701T123000--café-über-straße__français.txt",
+          "contents": "title:      Café Über straße\ndate:       2026-07-01\ntags:       français\nidentifier: 20260701T123000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-cjk",
+      "input": {
+        "title": "日本語 ノート",
+        "keywords": [
+          "日本"
+        ],
+        "signature": "",
+        "date": 1782889200
+      },
+      "outputs": {
+        "org": {
+          "filename": "20260701T123000--日本語-ノート__日本.org",
+          "contents": "#+title:      日本語 ノート\n#+date:       [2026-07-01 Wed 12:30]\n#+filetags:   :日本:\n#+identifier: 20260701T123000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20260701T123000--日本語-ノート__日本.md",
+          "contents": "---\ntitle:      \"日本語 ノート\"\ndate:       2026-07-01T12:30:00+05:30\ntags:       [\"日本\"]\nidentifier: \"20260701T123000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20260701T123000--日本語-ノート__日本.md",
+          "contents": "+++\ntitle      = \"日本語 ノート\"\ndate       = 2026-07-01T12:30:00+05:30\ntags       = [\"日本\"]\nidentifier = \"20260701T123000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20260701T123000--日本語-ノート__日本.txt",
+          "contents": "title:      日本語 ノート\ndate:       2026-07-01\ntags:       日本\nidentifier: 20260701T123000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-smart-quotes-dash",
+      "input": {
+        "title": "‘Smart’ “quotes” — and dashes",
+        "keywords": [],
+        "signature": "",
+        "date": 1782889200
+      },
+      "outputs": {
+        "org": {
+          "filename": "20260701T123000--smart-quotes-—-and-dashes.org",
+          "contents": "#+title:      ‘Smart’ “quotes” — and dashes\n#+date:       [2026-07-01 Wed 12:30]\n#+filetags:   \n#+identifier: 20260701T123000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20260701T123000--smart-quotes-—-and-dashes.md",
+          "contents": "---\ntitle:      \"‘Smart’ “quotes” — and dashes\"\ndate:       2026-07-01T12:30:00+05:30\ntags:       []\nidentifier: \"20260701T123000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20260701T123000--smart-quotes-—-and-dashes.md",
+          "contents": "+++\ntitle      = \"‘Smart’ “quotes” — and dashes\"\ndate       = 2026-07-01T12:30:00+05:30\ntags       = []\nidentifier = \"20260701T123000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20260701T123000--smart-quotes-—-and-dashes.txt",
+          "contents": "title:      ‘Smart’ “quotes” — and dashes\ndate:       2026-07-01\ntags:       \nidentifier: 20260701T123000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-multiple-spaces",
+      "input": {
+        "title": "  lots   of   space  ",
+        "keywords": [],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--lots-of-space.org",
+          "contents": "#+title:        lots   of   space  \n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--lots-of-space.md",
+          "contents": "---\ntitle:      \"  lots   of   space  \"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--lots-of-space.md",
+          "contents": "+++\ntitle      = \"  lots   of   space  \"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--lots-of-space.txt",
+          "contents": "title:        lots   of   space  \ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-separators",
+      "input": {
+        "title": "foo_bar=baz--qux",
+        "keywords": [],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--foo-barbaz-qux.org",
+          "contents": "#+title:      foo_bar=baz--qux\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--foo-barbaz-qux.md",
+          "contents": "---\ntitle:      \"foo_bar=baz--qux\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--foo-barbaz-qux.md",
+          "contents": "+++\ntitle      = \"foo_bar=baz--qux\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--foo-barbaz-qux.txt",
+          "contents": "title:      foo_bar=baz--qux\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-dots",
+      "input": {
+        "title": "v1.2.3 release notes",
+        "keywords": [
+          "release"
+        ],
+        "signature": "",
+        "date": 1735669800
+      },
+      "outputs": {
+        "org": {
+          "filename": "20250101T000000--v123-release-notes__release.org",
+          "contents": "#+title:      v1.2.3 release notes\n#+date:       [2025-01-01 Wed 00:00]\n#+filetags:   :release:\n#+identifier: 20250101T000000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20250101T000000--v123-release-notes__release.md",
+          "contents": "---\ntitle:      \"v1.2.3 release notes\"\ndate:       2025-01-01T00:00:00+05:30\ntags:       [\"release\"]\nidentifier: \"20250101T000000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20250101T000000--v123-release-notes__release.md",
+          "contents": "+++\ntitle      = \"v1.2.3 release notes\"\ndate       = 2025-01-01T00:00:00+05:30\ntags       = [\"release\"]\nidentifier = \"20250101T000000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20250101T000000--v123-release-notes__release.txt",
+          "contents": "title:      v1.2.3 release notes\ndate:       2025-01-01\ntags:       release\nidentifier: 20250101T000000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-uppercase",
+      "input": {
+        "title": "UPPER lower MiXeD",
+        "keywords": [
+          "CAPS"
+        ],
+        "signature": "",
+        "date": 1735669800
+      },
+      "outputs": {
+        "org": {
+          "filename": "20250101T000000--upper-lower-mixed__caps.org",
+          "contents": "#+title:      UPPER lower MiXeD\n#+date:       [2025-01-01 Wed 00:00]\n#+filetags:   :caps:\n#+identifier: 20250101T000000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20250101T000000--upper-lower-mixed__caps.md",
+          "contents": "---\ntitle:      \"UPPER lower MiXeD\"\ndate:       2025-01-01T00:00:00+05:30\ntags:       [\"caps\"]\nidentifier: \"20250101T000000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20250101T000000--upper-lower-mixed__caps.md",
+          "contents": "+++\ntitle      = \"UPPER lower MiXeD\"\ndate       = 2025-01-01T00:00:00+05:30\ntags       = [\"caps\"]\nidentifier = \"20250101T000000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20250101T000000--upper-lower-mixed__caps.txt",
+          "contents": "title:      UPPER lower MiXeD\ndate:       2025-01-01\ntags:       caps\nidentifier: 20250101T000000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "title-angle-brackets",
+      "input": {
+        "title": "a<b>c",
+        "keywords": [],
+        "signature": "",
+        "date": 1735669800
+      },
+      "outputs": {
+        "org": {
+          "filename": "20250101T000000--a<b>c.org",
+          "contents": "#+title:      a<b>c\n#+date:       [2025-01-01 Wed 00:00]\n#+filetags:   \n#+identifier: 20250101T000000\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20250101T000000--a<b>c.md",
+          "contents": "---\ntitle:      \"a<b>c\"\ndate:       2025-01-01T00:00:00+05:30\ntags:       []\nidentifier: \"20250101T000000\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20250101T000000--a<b>c.md",
+          "contents": "+++\ntitle      = \"a<b>c\"\ndate       = 2025-01-01T00:00:00+05:30\ntags       = []\nidentifier = \"20250101T000000\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20250101T000000--a<b>c.txt",
+          "contents": "title:      a<b>c\ndate:       2025-01-01\ntags:       \nidentifier: 20250101T000000\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "keywords-sorted",
+      "input": {
+        "title": "Sorting",
+        "keywords": [
+          "zeta",
+          "alpha",
+          "mu"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--sorting__alpha_mu_zeta.org",
+          "contents": "#+title:      Sorting\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :alpha:mu:zeta:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--sorting__alpha_mu_zeta.md",
+          "contents": "---\ntitle:      \"Sorting\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"alpha\", \"mu\", \"zeta\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--sorting__alpha_mu_zeta.md",
+          "contents": "+++\ntitle      = \"Sorting\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"alpha\", \"mu\", \"zeta\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--sorting__alpha_mu_zeta.txt",
+          "contents": "title:      Sorting\ndate:       2024-03-05\ntags:       alpha  mu  zeta\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "keywords-sluggified",
+      "input": {
+        "title": "Slugs",
+        "keywords": [
+          "foo bar",
+          "baz-qux",
+          "a_b",
+          "x=y",
+          "dot.ted"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--slugs__ab_bazqux_dotted_foobar_xy.org",
+          "contents": "#+title:      Slugs\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :ab:bazqux:dotted:foobar:xy:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--slugs__ab_bazqux_dotted_foobar_xy.md",
+          "contents": "---\ntitle:      \"Slugs\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"ab\", \"bazqux\", \"dotted\", \"foobar\", \"xy\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--slugs__ab_bazqux_dotted_foobar_xy.md",
+          "contents": "+++\ntitle      = \"Slugs\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"ab\", \"bazqux\", \"dotted\", \"foobar\", \"xy\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--slugs__ab_bazqux_dotted_foobar_xy.txt",
+          "contents": "title:      Slugs\ndate:       2024-03-05\ntags:       ab  bazqux  dotted  foobar  xy\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "keywords-mixed-case-sort",
+      "input": {
+        "title": "Case sort",
+        "keywords": [
+          "Zeta",
+          "alpha"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--case-sort__zeta_alpha.org",
+          "contents": "#+title:      Case sort\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :zeta:alpha:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--case-sort__zeta_alpha.md",
+          "contents": "---\ntitle:      \"Case sort\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"zeta\", \"alpha\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--case-sort__zeta_alpha.md",
+          "contents": "+++\ntitle      = \"Case sort\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"zeta\", \"alpha\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--case-sort__zeta_alpha.txt",
+          "contents": "title:      Case sort\ndate:       2024-03-05\ntags:       zeta  alpha\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "keywords-duplicates",
+      "input": {
+        "title": "Dups",
+        "keywords": [
+          "same",
+          "same"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--dups__same_same.org",
+          "contents": "#+title:      Dups\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :same:same:\n#+identifier: 20240305T140709\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--dups__same_same.md",
+          "contents": "---\ntitle:      \"Dups\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"same\", \"same\"]\nidentifier: \"20240305T140709\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--dups__same_same.md",
+          "contents": "+++\ntitle      = \"Dups\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"same\", \"same\"]\nidentifier = \"20240305T140709\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20240305T140709--dups__same_same.txt",
+          "contents": "title:      Dups\ndate:       2024-03-05\ntags:       same  same\nidentifier: 20240305T140709\n---------------------------\n\n"
+        }
+      }
+    },
+    {
+      "name": "everything",
+      "input": {
+        "title": "The Full Monty",
+        "keywords": [
+          "b",
+          "a"
+        ],
+        "signature": "9z",
+        "date": 1782889200
+      },
+      "outputs": {
+        "org": {
+          "filename": "20260701T123000==9z--the-full-monty__a_b.org",
+          "contents": "#+title:      The Full Monty\n#+date:       [2026-07-01 Wed 12:30]\n#+filetags:   :a:b:\n#+identifier: 20260701T123000\n#+signature:  9z\n\n"
+        },
+        "markdown-yaml": {
+          "filename": "20260701T123000==9z--the-full-monty__a_b.md",
+          "contents": "---\ntitle:      \"The Full Monty\"\ndate:       2026-07-01T12:30:00+05:30\ntags:       [\"a\", \"b\"]\nidentifier: \"20260701T123000\"\nsignature:  \"9z\"\n---\n\n"
+        },
+        "markdown-toml": {
+          "filename": "20260701T123000==9z--the-full-monty__a_b.md",
+          "contents": "+++\ntitle      = \"The Full Monty\"\ndate       = 2026-07-01T12:30:00+05:30\ntags       = [\"a\", \"b\"]\nidentifier = \"20260701T123000\"\nsignature  = \"9z\"\n+++\n\n"
+        },
+        "text": {
+          "filename": "20260701T123000==9z--the-full-monty__a_b.txt",
+          "contents": "title:      The Full Monty\ndate:       2026-07-01\ntags:       a  b\nidentifier: 20260701T123000\nsignature:  9z\n---------------------------\n\n"
+        }
+      }
+    }
+  ],
+  "orders": [
+    {
+      "name": "order-default",
+      "input": {
+        "title": "Order test",
+        "keywords": [
+          "k1",
+          "k2"
+        ],
+        "signature": "s1",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "identifier",
+        "signature",
+        "title",
+        "keywords"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "20240305T140709==s1--order-test__k1_k2.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "order-test",
+        "signature": "s1",
+        "keywords": "k1_k2"
+      }
+    },
+    {
+      "name": "order-title-first",
+      "input": {
+        "title": "Order test",
+        "keywords": [
+          "k1",
+          "k2"
+        ],
+        "signature": "s1",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "title",
+        "keywords",
+        "signature",
+        "identifier"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "--order-test__k1_k2==s1@@20240305T140709.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "order-test",
+        "signature": "s1",
+        "keywords": "k1_k2"
+      }
+    },
+    {
+      "name": "order-signature-first",
+      "input": {
+        "title": "Order test",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "s1",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "signature",
+        "title",
+        "keywords",
+        "identifier"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "==s1--order-test__k1@@20240305T140709.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "order-test",
+        "signature": "s1",
+        "keywords": "k1"
+      }
+    },
+    {
+      "name": "order-keywords-first",
+      "input": {
+        "title": "Order test",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "keywords",
+        "identifier",
+        "title",
+        "signature"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "__k1@@20240305T140709--order-test.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "order-test",
+        "signature": null,
+        "keywords": "k1"
+      }
+    },
+    {
+      "name": "order-partial-list",
+      "input": {
+        "title": "Partial order",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "s1",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "title",
+        "keywords"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "--partial-order__k1@@20240305T140709==s1.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "partial-order",
+        "signature": "s1",
+        "keywords": "k1"
+      }
+    },
+    {
+      "name": "order-identifier-last-no-title",
+      "input": {
+        "title": "",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "title",
+        "signature",
+        "keywords",
+        "identifier"
+      ],
+      "identifier_delimiter_always_present": false,
+      "filename": "__k1@@20240305T140709.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": null,
+        "signature": null,
+        "keywords": "k1"
+      }
+    },
+    {
+      "name": "delimiter-always-present",
+      "input": {
+        "title": "Always at",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "identifier",
+        "signature",
+        "title",
+        "keywords"
+      ],
+      "identifier_delimiter_always_present": true,
+      "filename": "@@20240305T140709--always-at__k1.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "always-at",
+        "signature": null,
+        "keywords": "k1"
+      }
+    },
+    {
+      "name": "delimiter-always-present-reordered",
+      "input": {
+        "title": "Always at",
+        "keywords": [
+          "k1"
+        ],
+        "signature": "s",
+        "date": 1709627829
+      },
+      "file_name_components_order": [
+        "title",
+        "identifier",
+        "keywords",
+        "signature"
+      ],
+      "identifier_delimiter_always_present": true,
+      "filename": "--always-at@@20240305T140709__k1==s.md",
+      "parsed": {
+        "identifier": "20240305T140709",
+        "title": "always-at",
+        "signature": "s",
+        "keywords": "k1"
+      }
+    }
+  ],
+  "slugs": [
+    {
+      "input": "Hello World",
+      "title": "hello-world",
+      "signature": "hello=world",
+      "keyword": "helloworld"
+    },
+    {
+      "input": "  leading and trailing  ",
+      "title": "leading-and-trailing",
+      "signature": "leading=and=trailing",
+      "keyword": "leadingandtrailing"
+    },
+    {
+      "input": "multiple    inner   spaces",
+      "title": "multiple-inner-spaces",
+      "signature": "multiple=inner=spaces",
+      "keyword": "multipleinnerspaces"
+    },
+    {
+      "input": "UPPER Case",
+      "title": "upper-case",
+      "signature": "upper=case",
+      "keyword": "uppercase"
+    },
+    {
+      "input": "Hello, World! (draft) #1 & more?",
+      "title": "hello-world-draft-1-more",
+      "signature": "hello=world=draft=1=more",
+      "keyword": "helloworlddraft1more"
+    },
+    {
+      "input": "foo_bar",
+      "title": "foo-bar",
+      "signature": "foo=bar",
+      "keyword": "foobar"
+    },
+    {
+      "input": "foo=bar",
+      "title": "foobar",
+      "signature": "foo=bar",
+      "keyword": "foobar"
+    },
+    {
+      "input": "foo-bar",
+      "title": "foo-bar",
+      "signature": "foobar",
+      "keyword": "foobar"
+    },
+    {
+      "input": "foo--bar__baz==qux",
+      "title": "foo-bar-bazqux",
+      "signature": "foobar=baz=qux",
+      "keyword": "foobarbazqux"
+    },
+    {
+      "input": "a.b.c",
+      "title": "abc",
+      "signature": "abc",
+      "keyword": "abc"
+    },
+    {
+      "input": "Café Über straße",
+      "title": "café-über-straße",
+      "signature": "café=über=straße",
+      "keyword": "caféüberstraße"
+    },
+    {
+      "input": "ÀÉÎÕÜ",
+      "title": "àéîõü",
+      "signature": "àéîõü",
+      "keyword": "àéîõü"
+    },
+    {
+      "input": "日本語 ノート",
+      "title": "日本語-ノート",
+      "signature": "日本語=ノート",
+      "keyword": "日本語ノート"
+    },
+    {
+      "input": "‘single’ “double”",
+      "title": "single-double",
+      "signature": "single=double",
+      "keyword": "singledouble"
+    },
+    {
+      "input": "em — dash",
+      "title": "em-—-dash",
+      "signature": "em=—=dash",
+      "keyword": "em—dash"
+    },
+    {
+      "input": "price: $5 / 50% off",
+      "title": "price-5-50-off",
+      "signature": "price=5=50=off",
+      "keyword": "price550off"
+    },
+    {
+      "input": "back\\slash",
+      "title": "back\\slash",
+      "signature": "back\\slash",
+      "keyword": "back\\slash"
+    },
+    {
+      "input": "a<b>c",
+      "title": "a<b>c",
+      "signature": "a<b>c",
+      "keyword": "a<b>c"
+    },
+    {
+      "input": "tab\tseparated",
+      "title": "tab\tseparated",
+      "signature": "tab\tseparated",
+      "keyword": "tab\tseparated"
+    },
+    {
+      "input": "@at@sign@",
+      "title": "atsign",
+      "signature": "atsign",
+      "keyword": "atsign"
+    },
+    {
+      "input": "trailing_",
+      "title": "trailing",
+      "signature": "trailing",
+      "keyword": "trailing"
+    },
+    {
+      "input": "-leading-hyphen",
+      "title": "leading-hyphen",
+      "signature": "leadinghyphen",
+      "keyword": "leadinghyphen"
+    }
+  ],
+  "links": [
+    {
+      "name": "plain",
+      "input": {
+        "title": "Linked note",
+        "keywords": [
+          "a"
+        ],
+        "signature": "",
+        "date": 1709627829,
+        "description": "Custom text"
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--linked-note__a.org",
+          "contents": "#+title:      Linked note\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   :a:\n#+identifier: 20240305T140709\n\n",
+          "default_description": "Linked note",
+          "link_with_description": "[[denote:20240305T140709][Custom text]]",
+          "link_default_description": "[[denote:20240305T140709][Linked note]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--linked-note__a.md",
+          "contents": "---\ntitle:      \"Linked note\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       [\"a\"]\nidentifier: \"20240305T140709\"\n---\n\n",
+          "default_description": "Linked note",
+          "link_with_description": "[Custom text](denote:20240305T140709)",
+          "link_default_description": "[Linked note](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--linked-note__a.md",
+          "contents": "+++\ntitle      = \"Linked note\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = [\"a\"]\nidentifier = \"20240305T140709\"\n+++\n\n",
+          "default_description": "Linked note",
+          "link_with_description": "[Custom text](denote:20240305T140709)",
+          "link_default_description": "[Linked note](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "text": {
+          "filename": "20240305T140709--linked-note__a.txt",
+          "contents": "title:      Linked note\ndate:       2024-03-05\ntags:       a\nidentifier: 20240305T140709\n---------------------------\n\n",
+          "default_description": "Linked note",
+          "link_with_description": "[[denote:20240305T140709][Custom text]]",
+          "link_default_description": "[[denote:20240305T140709][Linked note]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        }
+      }
+    },
+    {
+      "name": "with-signature",
+      "input": {
+        "title": "Linked note",
+        "keywords": [],
+        "signature": "1b",
+        "date": 1709627829,
+        "description": "Sig desc"
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709==1b--linked-note.org",
+          "contents": "#+title:      Linked note\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n#+signature:  1b\n\n",
+          "default_description": "1b  Linked note",
+          "link_with_description": "[[denote:20240305T140709][Sig desc]]",
+          "link_default_description": "[[denote:20240305T140709][1b  Linked note]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709==1b--linked-note.md",
+          "contents": "---\ntitle:      \"Linked note\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\nsignature:  \"1b\"\n---\n\n",
+          "default_description": "1b  Linked note",
+          "link_with_description": "[Sig desc](denote:20240305T140709)",
+          "link_default_description": "[1b  Linked note](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709==1b--linked-note.md",
+          "contents": "+++\ntitle      = \"Linked note\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\nsignature  = \"1b\"\n+++\n\n",
+          "default_description": "1b  Linked note",
+          "link_with_description": "[Sig desc](denote:20240305T140709)",
+          "link_default_description": "[1b  Linked note](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "text": {
+          "filename": "20240305T140709==1b--linked-note.txt",
+          "contents": "title:      Linked note\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\nsignature:  1b\n---------------------------\n\n",
+          "default_description": "1b  Linked note",
+          "link_with_description": "[[denote:20240305T140709][Sig desc]]",
+          "link_default_description": "[[denote:20240305T140709][1b  Linked note]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        }
+      }
+    },
+    {
+      "name": "unicode-description",
+      "input": {
+        "title": "Café",
+        "keywords": [],
+        "signature": "",
+        "date": 1709627829,
+        "description": "Ünïcödé — desc"
+      },
+      "outputs": {
+        "org": {
+          "filename": "20240305T140709--café.org",
+          "contents": "#+title:      Café\n#+date:       [2024-03-05 Tue 14:07]\n#+filetags:   \n#+identifier: 20240305T140709\n\n",
+          "default_description": "Café",
+          "link_with_description": "[[denote:20240305T140709][Ünïcödé — desc]]",
+          "link_default_description": "[[denote:20240305T140709][Café]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-yaml": {
+          "filename": "20240305T140709--café.md",
+          "contents": "---\ntitle:      \"Café\"\ndate:       2024-03-05T14:07:09+05:30\ntags:       []\nidentifier: \"20240305T140709\"\n---\n\n",
+          "default_description": "Café",
+          "link_with_description": "[Ünïcödé — desc](denote:20240305T140709)",
+          "link_default_description": "[Café](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "markdown-toml": {
+          "filename": "20240305T140709--café.md",
+          "contents": "+++\ntitle      = \"Café\"\ndate       = 2024-03-05T14:07:09+05:30\ntags       = []\nidentifier = \"20240305T140709\"\n+++\n\n",
+          "default_description": "Café",
+          "link_with_description": "[Ünïcödé — desc](denote:20240305T140709)",
+          "link_default_description": "[Café](denote:20240305T140709)",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        },
+        "text": {
+          "filename": "20240305T140709--café.txt",
+          "contents": "title:      Café\ndate:       2024-03-05\ntags:       \nidentifier: 20240305T140709\n---------------------------\n\n",
+          "default_description": "Café",
+          "link_with_description": "[[denote:20240305T140709][Ünïcödé — desc]]",
+          "link_default_description": "[[denote:20240305T140709][Café]]",
+          "link_empty_description": "[[denote:20240305T140709]]",
+          "link_id_only": "[[denote:20240305T140709]]"
+        }
+      }
+    }
+  ],
+  "parse": [
+    {
+      "filename": "20240305T140709--hello-world__emacs_neovim.org",
+      "identifier": "20240305T140709",
+      "title": "hello-world",
+      "signature": null,
+      "keywords": "emacs_neovim"
+    },
+    {
+      "filename": "20240305T140709--hello-world.md",
+      "identifier": "20240305T140709",
+      "title": "hello-world",
+      "signature": null,
+      "keywords": null
+    },
+    {
+      "filename": "20240305T140709__emacs.txt",
+      "identifier": "20240305T140709",
+      "title": null,
+      "signature": null,
+      "keywords": "emacs"
+    },
+    {
+      "filename": "20240305T140709.org",
+      "identifier": "20240305T140709",
+      "title": null,
+      "signature": null,
+      "keywords": null
+    },
+    {
+      "filename": "20240305T140709==1a2--sequence-note__zettel.org",
+      "identifier": "20240305T140709",
+      "title": "sequence-note",
+      "signature": "1a2",
+      "keywords": "zettel"
+    },
+    {
+      "filename": "20240305T140709==1a2.md",
+      "identifier": "20240305T140709",
+      "title": null,
+      "signature": "1a2",
+      "keywords": null
+    },
+    {
+      "filename": "--order-test__k1_k2==s1@@20240305T140709.md",
+      "identifier": "20240305T140709",
+      "title": "order-test",
+      "signature": "s1",
+      "keywords": "k1_k2"
+    },
+    {
+      "filename": "==s1--order-test__k1@@20240305T140709.md",
+      "identifier": "20240305T140709",
+      "title": "order-test",
+      "signature": "s1",
+      "keywords": "k1"
+    },
+    {
+      "filename": "__k1@@20240305T140709--order-test.md",
+      "identifier": "20240305T140709",
+      "title": "order-test",
+      "signature": null,
+      "keywords": "k1"
+    },
+    {
+      "filename": "@@20240305T140709--always-at__k1.md",
+      "identifier": "20240305T140709",
+      "title": "always-at",
+      "signature": null,
+      "keywords": "k1"
+    },
+    {
+      "filename": "20240305T140709--encrypted__secret.org.gpg",
+      "identifier": "20240305T140709",
+      "title": "encrypted",
+      "signature": null,
+      "keywords": "secret"
+    },
+    {
+      "filename": "/some/dir/20240305T140709--with-dir__kw.md",
+      "identifier": "20240305T140709",
+      "title": "with-dir",
+      "signature": null,
+      "keywords": "kw"
+    },
+    {
+      "filename": "20240305T140709--title-with--double-hyphen__kw.md",
+      "identifier": "20240305T140709",
+      "title": "title-with--double-hyphen",
+      "signature": null,
+      "keywords": "kw"
+    },
+    {
+      "filename": "not-a-denote-file.md",
+      "identifier": null,
+      "title": null,
+      "signature": null,
+      "keywords": null
+    },
+    {
+      "filename": "@@custom-id--free-form-identifier.md",
+      "identifier": "custom-id",
+      "title": "free-form-identifier",
+      "signature": null,
+      "keywords": null
+    }
+  ]
+}
