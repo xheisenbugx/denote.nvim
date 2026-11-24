@@ -46,6 +46,7 @@ function M.setup_global()
     { p .. "K", denote.keywords_remove, "Remove keywords" },
     { p .. "j", denote.journal_new_or_existing_entry, "Today's journal entry" },
     { p .. "J", denote.journal_link_or_create_entry, "Link to today's journal" },
+    { p .. "C", denote.journal_calendar, "Journal calendar" },
     { p .. "zp", denote.sequence_new_parent, "Sequence: new parent" },
     { p .. "zc", denote.sequence_new_child, "Sequence: new child" },
     { p .. "zs", denote.sequence_new_sibling, "Sequence: new sibling" },

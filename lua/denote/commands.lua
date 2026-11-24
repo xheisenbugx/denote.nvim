@@ -145,6 +145,9 @@ local function subcommands()
     journal_link = function(args)
       d.journal_link_or_create_entry({ date = #args > 0 and table.concat(args, " ") or nil })
     end,
+    journal_calendar = function(args)
+      d.journal_calendar({ date = #args > 0 and table.concat(args, " ") or nil })
+    end,
     sequence_parent = function()
       d.sequence_new_parent()
     end,

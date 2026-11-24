@@ -195,6 +195,9 @@ end
 M.journal_link_or_create_entry = function(...)
   return require("denote.journal").link_or_create_entry(...)
 end
+M.journal_calendar = function(...)
+  return require("denote.calendar").open(...)
+end
 
 -- Sequences (Folgezettel)
 M.sequence_new_parent = function(...)
