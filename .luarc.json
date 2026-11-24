@@ -15,6 +15,7 @@
     "eq",
     "ok",
     "with_temp_dir",
-    "buf_lines"
+    "buf_lines",
+    "wait_loaded"
   ]
 }

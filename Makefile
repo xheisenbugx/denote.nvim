@@ -1,14 +1,18 @@
-.PHONY: test lint format docs media publish-media
+.PHONY: test lint format docs bench media publish-media
 
 test:
 	@d=$$(mktemp -d) && XDG_DATA_HOME=$$d XDG_CACHE_HOME=$$d/cache nvim --headless -u tests/minimal_init.lua -l tests/run.lua $(SPEC); \
 	s=$$?; rm -rf $$d; exit $$s
 
 lint:
-	stylua --check lua plugin tests
+	stylua --check lua plugin tests scripts
 
 format:
-	stylua lua plugin tests
+	stylua lua plugin tests scripts
+
+# Benchmark against a generated vault: make bench N=10000
+bench:
+	@nvim --headless -u tests/minimal_init.lua -l scripts/bench.lua $(N)
 
 docs:
 	nvim --headless --clean -c "helptags doc" -c "qa!"

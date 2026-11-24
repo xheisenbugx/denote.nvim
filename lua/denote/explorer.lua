@@ -487,6 +487,7 @@ function M.open(opts)
         os.remove(f)
         state.marked[f] = nil
       end
+      utils.notify_fs_change()
       render()
     end
   end, "delete file(s)")

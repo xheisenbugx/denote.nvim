@@ -32,7 +32,7 @@ describe("denote.backlinks", function()
       local files = backlinks.files_for(target.identifier, { exclude_file = target.path })
       eq({ md_linker.path, org_linker.path }, files)
 
-      local buf = denote.backlinks({ file = target.path })
+      local buf = wait_loaded(denote.backlinks({ file = target.path }))
       ok(vim.api.nvim_buf_is_valid(buf))
       local joined = table.concat(buf_lines(buf), "\n")
       ok(joined:find("MD Note", 1, true) ~= nil)

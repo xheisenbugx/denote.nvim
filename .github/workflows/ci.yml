@@ -7,17 +7,40 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, nvim ${{ matrix.neovim }}${{ matrix.ripgrep && ', rg' || '' }})
+    runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        neovim: ["v0.10.4", "v0.11.0", "nightly"]
       fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        neovim: ["v0.10.4", "v0.11.0", "nightly"]
+        ripgrep: [false]
+        include:
+          # Exercise the ripgrep backend and macOS path handling (/var -> /private/var symlinks)
+          - os: ubuntu-latest
+            neovim: "v0.11.0"
+            ripgrep: true
+          - os: macos-latest
+            neovim: "v0.11.0"
+            ripgrep: true
+          - os: macos-latest
+            neovim: "nightly"
+            ripgrep: false
     steps:
       - uses: actions/checkout@v4
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: ${{ matrix.neovim }}
+      - name: Install ripgrep
+        if: matrix.ripgrep
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; else sudo apt-get update && sudo apt-get install -y ripgrep; fi
+      - name: Hide ripgrep
+        if: ${{ !matrix.ripgrep }}
+        run: |
+          # Make sure the pure-Lua fallback is what gets tested on these jobs
+          for p in $(which -a rg 2>/dev/null); do sudo mv "$p" "$p.disabled"; done
       - name: Run headless tests
         run: make test
 
@@ -29,4 +52,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check lua plugin tests
+          args: --check lua plugin tests scripts

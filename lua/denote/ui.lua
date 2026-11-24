@@ -33,18 +33,77 @@ function M.setup_highlights()
   end
 end
 
---- Highlight `denote:` links (and optionally flag broken IDs or conceal targets)
---- in Markdown and Plain Text buffers. (Org buffers with org.nvim get native link highlighting.)
+local ns_diag = vim.api.nvim_create_namespace("denote_broken_links")
+
+--- Report broken `denote:` links in `bufnr` through `vim.diagnostic` (`ui.diagnostics`).
 ---@param bufnr integer
-function M.decorate_buffer(bufnr)
-  if not config.opts.ui or not config.opts.ui.highlight_links then
+---@param broken { lnum: integer, start_col: integer, end_col: integer, identifier: string }[]
+local function set_diagnostics(bufnr, broken)
+  local ui_opts = config.opts.ui or {}
+  if ui_opts.diagnostics == false then
+    vim.diagnostic.reset(ns_diag, bufnr)
     return
   end
+  local severity = ui_opts.diagnostics_severity or vim.diagnostic.severity.WARN
+  local diags = {}
+  for _, b in ipairs(broken) do
+    diags[#diags + 1] = {
+      lnum = b.lnum - 1,
+      col = b.start_col - 1,
+      end_col = b.end_col,
+      severity = severity,
+      source = "denote",
+      code = "broken-link",
+      message = "Broken Denote link: no note with identifier " .. b.identifier,
+    }
+  end
+  vim.diagnostic.set(ns_diag, bufnr, diags)
+end
+
+--- Return the broken `denote:` ID links in `lines` (targets resolved like `follow_link`,
+--- i.e. across the active directory, silos, and the journal directory).
+---@param lines string[]
+---@return { lnum: integer, start_col: integer, end_col: integer, identifier: string }[]
+function M.broken_links(lines)
+  local out = {}
+  local known = {}
+  for lnum, line in ipairs(lines) do
+    if line:find("denote:", 1, true) then
+      for _, link in ipairs(links.parse_line(line, lnum)) do
+        if link.kind == "id" and link.identifier then
+          local id = link.identifier
+          if known[id] == nil then
+            known[id] = files.has_id(id)
+          end
+          if not known[id] then
+            out[#out + 1] = { lnum = lnum, start_col = link.start_col, end_col = link.end_col, identifier = id }
+          end
+        end
+      end
+    end
+  end
+  return out
+end
+
+--- Highlight `denote:` links (and optionally flag broken IDs or conceal targets)
+--- in Markdown and Plain Text buffers. (Org buffers with org.nvim get native link highlighting,
+--- but still receive broken-link diagnostics.)
+---@param bufnr integer
+function M.decorate_buffer(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
   local ft = vim.bo[bufnr].filetype
   if ft ~= "markdown" and ft ~= "md" and ft ~= "text" and ft ~= "org" then
+    return
+  end
+  local ui_opts = config.opts.ui or {}
+  local check_broken = ui_opts.check_broken_links ~= false
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local broken = check_broken and M.broken_links(lines) or {}
+  set_diagnostics(bufnr, broken)
+
+  if not ui_opts.highlight_links then
     return
   end
   -- Skip Org buffers when org.nvim is active (org.nvim draws its own links & concealment)
@@ -53,10 +112,11 @@ function M.decorate_buffer(bufnr)
   end
 
   vim.api.nvim_buf_clear_namespace(bufnr, ns_links, 0, -1)
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local check_broken = config.opts.ui.check_broken_links ~= false
-  local conceal = config.opts.ui.conceal_links == true
-  local existing_ids = nil
+  local conceal = ui_opts.conceal_links == true
+  local broken_at = {}
+  for _, b in ipairs(broken) do
+    broken_at[b.lnum .. ":" .. b.start_col] = true
+  end
 
   for lnum, line in ipairs(lines) do
     if line:find("denote:", 1, true) then
@@ -64,11 +124,8 @@ function M.decorate_buffer(bufnr)
         local hl = "DenoteLink"
         if link.kind ~= "id" then
           hl = "DenoteQueryLink"
-        elseif check_broken and link.identifier then
-          existing_ids = existing_ids or files.identifier_set()
-          if not existing_ids[link.identifier] then
-            hl = "DenoteBrokenLink"
-          end
+        elseif broken_at[lnum .. ":" .. link.start_col] then
+          hl = "DenoteBrokenLink"
         end
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_links, lnum - 1, link.start_col - 1, {
           end_col = link.end_col,

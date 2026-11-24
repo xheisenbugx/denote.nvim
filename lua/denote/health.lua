@@ -36,10 +36,22 @@ function M.check()
   health.ok("picker backend: " .. backend)
 
   -- Optional ripgrep
+  local search_opts = config.opts.search or {}
   if vim.fn.executable("rg") == 1 then
-    health.ok("ripgrep (rg) found: fast full-text search enabled")
+    if search_opts.ripgrep == false then
+      health.info("ripgrep (rg) found but disabled (search.ripgrep = false): using pure Lua search")
+    else
+      health.ok("ripgrep (rg) found: grep, backlinks, and reports use it")
+    end
   else
     health.info("ripgrep (rg) not found: using built-in pure Lua search")
+  end
+
+  -- Diagnostics
+  if config.opts.ui and config.opts.ui.diagnostics ~= false and config.opts.ui.check_broken_links ~= false then
+    health.ok("broken links reported via vim.diagnostic")
+  else
+    health.info("broken-link diagnostics disabled (ui.diagnostics / ui.check_broken_links)")
   end
 
   -- org.nvim integration

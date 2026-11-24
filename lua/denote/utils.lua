@@ -86,6 +86,14 @@ function M.read_lines(path, max_lines)
   return lines
 end
 
+--- Tell the file index that the filesystem changed (lazy require avoids a load cycle).
+function M.notify_fs_change()
+  local ok, files = pcall(require, "denote.files")
+  if ok then
+    files.invalidate()
+  end
+end
+
 --- Write a string to a file atomically / directly.
 ---@param path string
 ---@param content string
@@ -101,6 +109,7 @@ function M.write_file(path, content)
   end
   f:write(content)
   f:close()
+  M.notify_fs_change()
   return true, nil
 end
 
@@ -117,7 +126,8 @@ end
 ---@return integer|nil
 function M.find_buffer(path)
   local target = M.normalize(path)
-  local target_real = uv.fs_realpath(target)
+  local target_base = vim.fs.basename(target)
+  local target_real
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(bufnr) then
       local name = vim.api.nvim_buf_get_name(bufnr)
@@ -126,10 +136,14 @@ function M.find_buffer(path)
         if norm == target then
           return bufnr
         end
-        if target_real then
-          local real = uv.fs_realpath(norm)
-          if real and real == target_real then
-            return bufnr
+        -- Only pay for realpath() when basenames agree (symlinked parent directories).
+        if vim.fs.basename(norm) == target_base then
+          target_real = target_real or uv.fs_realpath(target) or false
+          if target_real then
+            local real = uv.fs_realpath(norm)
+            if real and real == target_real then
+              return bufnr
+            end
           end
         end
       end
@@ -151,6 +165,19 @@ function M.relpath(path, base)
   local prefix = b .. "/"
   if p:sub(1, #prefix) == prefix then
     return p:sub(#prefix + 1)
+  end
+  -- Retry with symlinks resolved (e.g. macOS `/var` vs `/private/var`) before walking up.
+  local canonicalize = require("denote.config").canonicalize
+  local p_real, b_real = canonicalize(p), canonicalize(b)
+  if p_real ~= p or b_real ~= b then
+    p, b = p_real, b_real
+    if p == b then
+      return ""
+    end
+    prefix = b .. "/"
+    if p:sub(1, #prefix) == prefix then
+      return p:sub(#prefix + 1)
+    end
   end
   -- Compute ../ relative path when outside base
   local p_parts = vim.split(p, "/", { plain = true, trimempty = true })

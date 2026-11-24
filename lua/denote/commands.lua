@@ -193,6 +193,24 @@ local function subcommands()
     dblock_files = function(args)
       d.org_dblock_insert_files(#args > 0 and table.concat(args, " ") or nil)
     end,
+    preview = function()
+      d.preview()
+    end,
+    unlinked_mentions = function()
+      d.unlinked_mentions()
+    end,
+    link_mention = function()
+      d.link_mention()
+    end,
+    check = function()
+      d.check()
+    end,
+    reindex = function()
+      require("denote.files").invalidate()
+      require("denote.frontmatter").clear_cache()
+      require("denote.search").reset()
+      require("denote.utils").notify("Denote index cleared")
+    end,
     dblock_update = function()
       local n = d.org_dblock_update()
       require("denote.utils").notify(string.format("Updated %d dynamic block(s)", n))

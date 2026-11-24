@@ -532,15 +532,47 @@ function M.parse_file(path)
   return M.parse_lines(lines, ft)
 end
 
+local uv = vim.uv or vim.loop
+
+--- Cache of on-disk titles: path -> { key = "mtime:size", title = string|false }.
+---@type table<string, { key: string, title: string|false }>
+local title_cache = {}
+
+--- Clear the front matter title cache.
+function M.clear_cache()
+  title_cache = {}
+end
+
+---@param path string
+---@return string|nil
+local function front_matter_title(path)
+  local bufnr = utils.find_buffer(path)
+  if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
+    -- Live buffer contents may differ from disk: never cache.
+    local fm = M.parse_file(path)
+    return fm and fm.title ~= "" and fm.title or nil
+  end
+  local st = uv.fs_stat(path)
+  local key = st and (st.mtime.sec .. "." .. (st.mtime.nsec or 0) .. ":" .. st.size) or ""
+  local hit = title_cache[path]
+  if hit and hit.key == key then
+    return hit.title or nil
+  end
+  local fm = M.parse_file(path)
+  local title = fm and fm.title ~= "" and fm.title or nil
+  title_cache[path] = { key = key, title = title or false }
+  return title
+end
+
 --- Extract the human-readable title of a Denote file:
 --- front matter `title` if present and non-empty, otherwise desluggified filename title,
 --- otherwise filename stem.
 ---@param path string
 ---@return string
 function M.extract_title(path)
-  local fm = M.parse_file(path)
-  if fm and fm.title and fm.title ~= "" then
-    return fm.title
+  local title = front_matter_title(path)
+  if title then
+    return title
   end
   local parsed = naming.parse_filename(path)
   if parsed.title and parsed.title ~= "" then

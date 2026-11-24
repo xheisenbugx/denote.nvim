@@ -25,6 +25,7 @@ local M = {}
 ---@field prefix string Leader prefix for global keymaps (default: "<leader>n")
 ---@field follow_link string|false Buffer-local keymap to follow a denote: link (default: "<CR>")
 ---@field follow_link_fallback boolean Fall back to native keymap when cursor is not on a denote: link
+---@field preview_link string|false Buffer-local keymap to preview the linked note (default: "K")
 
 ---@class denote.Config
 M.defaults = {
@@ -156,6 +157,27 @@ M.defaults = {
     highlight_links = true,
     conceal_links = false,
     check_broken_links = true,
+    --- Report broken links through `vim.diagnostic` (shows in `]d`, quickfix, Trouble, ...).
+    diagnostics = true,
+    --- Severity for broken-link diagnostics (`vim.diagnostic.severity.*`).
+    diagnostics_severity = vim.diagnostic.severity.WARN,
+    --- Delay (ms) before re-checking links after leaving insert mode / saving.
+    debounce_ms = 150,
+  },
+
+  --- Full-text search (grep, backlinks, query links, unlinked mentions).
+  search = {
+    --- Use ripgrep when installed (falls back to pure Lua otherwise).
+    ripgrep = true,
+    --- How long (ms) the statusline `%b` backlinks indicator is cached before re-checking.
+    backlinks_indicator_ttl = 10000,
+  },
+
+  --- Hover preview of the note under a `denote:` link.
+  preview = {
+    --- Maximum number of body lines shown in the preview float.
+    max_lines = 20,
+    border = "rounded",
   },
 
   --- Integrations with other Neovim plugins.
@@ -170,6 +192,9 @@ M.defaults = {
     prefix = "<leader>n",
     follow_link = "<CR>",
     follow_link_fallback = true,
+    --- Buffer-local keymap to preview the linked note in a float (falls back to the native key
+    --- when the cursor is not on a `denote:` link). Set to false to disable.
+    preview_link = "K",
   },
 
   --- Extra custom file types merged on top of built-ins (org, markdown-yaml, markdown-toml, text).
@@ -189,8 +214,47 @@ M.active_directory = nil
 function M.setup(user_opts)
   M.opts = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), user_opts or {})
   M.active_directory = nil
+  -- Exclusion patterns and custom file types affect cached listings.
+  local ok_files, files = pcall(require, "denote.files")
+  if ok_files then
+    files.invalidate()
+  end
+  local ok_fm, fm = pcall(require, "denote.frontmatter")
+  if ok_fm and fm.clear_cache then
+    fm.clear_cache()
+  end
   return M.opts
 end
+
+local uv = vim.uv or vim.loop
+
+--- Resolve symlinks in `path` (e.g. macOS `/var` -> `/private/var`) so that paths built from
+--- the Denote directory compare equal to buffer names, which Neovim stores resolved.
+--- Non-existent trailing components are kept as-is on top of the nearest existing ancestor.
+---@param path string
+---@return string
+function M.canonicalize(path)
+  local real = uv.fs_realpath(path)
+  if real then
+    return real
+  end
+  local tail = {}
+  local cur = path
+  while true do
+    local parent = vim.fs.dirname(cur)
+    if not parent or parent == cur then
+      return path
+    end
+    table.insert(tail, 1, vim.fs.basename(cur))
+    local parent_real = uv.fs_realpath(parent)
+    if parent_real then
+      return (parent_real == "/" and "" or parent_real) .. "/" .. table.concat(tail, "/")
+    end
+    cur = parent
+  end
+end
+
+local dir_memo = { tick = -1, map = {} }
 
 --- Return the currently active Denote directory (expanded and normalized).
 ---@param dir? string Optional explicit directory override
@@ -200,11 +264,22 @@ function M.directory(dir)
   if type(raw) == "function" then
     raw = raw()
   end
+  -- Memoize per event-loop iteration: hot loops (resolving many links) call this constantly.
+  local tick = uv.now()
+  if dir_memo.tick ~= tick then
+    dir_memo.tick, dir_memo.map = tick, {}
+  end
+  local hit = dir_memo.map[raw]
+  if hit then
+    return hit
+  end
   local norm = vim.fs.normalize(raw)
   if #norm > 1 then
     norm = norm:gsub("/+$", "")
   end
-  return norm
+  local out = M.canonicalize(norm)
+  dir_memo.map[raw] = out
+  return out
 end
 
 return M

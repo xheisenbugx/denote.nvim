@@ -163,6 +163,20 @@ M.query_filenames_link = function(...)
   return require("denote.query").query_filenames_link(...)
 end
 
+-- Preview & Reports
+M.preview = function(...)
+  return require("denote.preview").open(...)
+end
+M.unlinked_mentions = function(...)
+  return require("denote.report").unlinked_mentions(...)
+end
+M.link_mention = function(...)
+  return require("denote.report").link_mention(...)
+end
+M.check = function(...)
+  return require("denote.report").check(...)
+end
+
 -- Explorer & Sort
 M.explorer = function(...)
   return require("denote.explorer").open(...)
