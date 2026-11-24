@@ -28,6 +28,12 @@ local M = {}
 ---@field on_created? fun(path: string, meta: table) Callback after note is created
 ---@field body_template? string Body with capture escapes (`%^{Prompt}`, `%i`, `%a`, `%?`, ...)
 ---@field context? denote.CaptureContext Capture context for template escapes (origin, region, answers)
+---@field _initial_title? string Internal: default text for the title prompt
+---@field _silo_dir? string Internal: create the note inside this silo
+
+---@class denote.RegionOpts: denote.CreateOpts
+---@field line1? integer First line of the region (default: `'<`)
+---@field line2? integer Last line of the region (default: `'>`)
 
 --- Resolve a template entry into a string (string templates get capture escapes expanded).
 ---@param template_name? string
@@ -458,7 +464,7 @@ end
 
 --- Open an existing Denote note, or create a new one if no match is selected
 --- (`denote-open-or-create`).
----@param opts? { dir?: string, prompts?: string[] }
+---@param opts? denote.CreateOpts
 function M.open_or_create(opts)
   opts = opts or {}
   local root = config.directory(opts.dir)
@@ -477,7 +483,7 @@ function M.open_or_create(opts)
       if chosen[1] then
         utils.open_file(chosen[1].value, how)
       else
-        local create_opts = vim.deepcopy(opts)
+        local create_opts = vim.deepcopy(opts) --[[@as denote.CreateOpts]]
         if query and vim.trim(query) ~= "" then
           create_opts._initial_title = vim.trim(query)
         end
@@ -525,9 +531,9 @@ end
 --- Create a new Denote note containing the current visual selection (`denote-region`).
 --- If invoked from a code buffer, wraps the region in an Org `#+begin_src <lang>` or
 --- Markdown fenced code block matching the target note's syntax.
----@param opts? denote.CreateOpts & { line1?: integer, line2?: integer }
+---@param opts? denote.RegionOpts
 function M.region(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.RegionOpts]]
   local bufnr = vim.api.nvim_get_current_buf()
   local src_ft = vim.bo[bufnr].filetype
   local line1 = opts.line1 or vim.fn.line("'<")

@@ -162,7 +162,7 @@ function M.open(opts)
 
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     for _, h in ipairs(hls) do
-      pcall(vim.api.nvim_buf_add_highlight, buf, ns, h[4], h[1], h[2], h[3])
+      utils.add_highlight(buf, ns, h[4], h[1], h[2], h[3])
     end
 
     if has_win then

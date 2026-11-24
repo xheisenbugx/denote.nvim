@@ -1,4 +1,4 @@
-*denote.txt*  Emacs Denote, rebuilt for Neovim in pure Lua
+*denote.txt* *denote.nvim*  Emacs Denote, rebuilt for Neovim in pure Lua
 
 ==============================================================================
 CONTENTS                                                     *denote-contents*
@@ -14,6 +14,10 @@ CONTENTS                                                     *denote-contents*
   9. Lua API ............................................... |denote-api|
  10. Search, Index & Performance ........................... |denote-search|
  11. Diagnostics, Preview & Reports ........................ |denote-reports|
+ 12. Journal Intervals & Calendar .......................... |denote-journal|
+ 13. Capture Templates ..................................... |denote-capture|
+
+The Lua API reference generated from the code is in |denote-api.txt|.
 
 ==============================================================================
 1. INTRODUCTION                                                 *denote-intro*
@@ -122,6 +126,10 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `explorer [regexp]`         Open the interactive Denote explorer buffer
     `sort_dired`                Prompt for regexp & sort key, open explorer
 
+  Capture (`denote-org-capture`):
+    `capture [key]`             Create a note from a capture template
+    `:[range]DenoteCapture [key]` Same, with the selection as `%i`
+
   Reports & Maintenance:
     `unlinked_mentions`         Quickfix list of unlinked mentions of this note
     `link_mention`              Turn the mention on the current line into a link
@@ -145,6 +153,7 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `journal [date]`            Open or create journal entry for today/date
     `journal_new [date]`        Always create a new journal entry
     `journal_link [date]`       Link to today's (or date's) journal entry
+    `journal_calendar [date]`   Month calendar of journal entries
 
   Sequences (`denote-sequence` / Folgezettel):
     `sequence_parent`           Create new top-level sequence note (`1`, `2`)
@@ -199,6 +208,8 @@ All global keymaps live under `mappings.prefix` (default `<leader>n`):
   `<leader>nK`   Remove keywords
   `<leader>nj`   Today's journal entry
   `<leader>nJ`   Link to today's journal entry
+  `<leader>nC`   Journal calendar
+  `<leader>nx`   Capture from a template (visual: capture the selection)
   `<leader>nz*`  Sequence commands (`p`, `c`, `s`, `f`, `r`, `l`)
   `<leader>nw*`  Silo commands (`c`, `o`, `e`)
 
@@ -240,7 +251,9 @@ See `lua/denote/config.lua` for all defaults:
   - `markdown_link_style` (string)           `"denote"`, `"wiki"`, `"relative"`
   - `picker` (string)                        `"auto"`, `"snacks"`, `"fzf-lua"`, `"telescope"`, `"mini"`, `"select"`
   - `silos` (string[])                       Additional isolated note directories
-  - `journal` (table)                        Journal directory, keyword, format
+  - `journal` (table)                        Journal directory, keyword, `interval`,
+                                             `week_start`, `title_format` (|denote-journal|)
+  - `capture` (table)                        `specifiers`, `templates` (|denote-capture|)
   - `sequence` (table)                       `{ scheme = "numeric" | "alphanumeric" }`
   - `ui` (table)                             Link highlighting, concealment, broken link checks,
                                              `diagnostics`, `diagnostics_severity`, `debounce_ms`
@@ -323,4 +336,98 @@ a `denote:` link, keeping its original text as the description.
 Vault check ~
 `:Denote check` lists broken links (`W`) and orphan notes (`I`, notes no other
 note links to) in the quickfix list.
+==============================================================================
+12. JOURNAL INTERVALS & CALENDAR                              *denote-journal*
+
+                                                     *denote-journal.interval*
+`journal.interval` is "daily" (default), "weekly", "monthly", or "yearly",
+matching `denote-journal-interval`. |:Denote-journal| reuses an existing entry
+when the date in its identifier falls in the same period as the requested
+date, and otherwise creates one. `:Denote journal_new` always creates.
+`:Denote journal_link` links to the period's entry. Unknown values act as
+"daily".
+
+                                                   *denote-journal.week_start*
+`journal.week_start` is the first day of the week for "weekly" and for the
+calendar: 1 = Monday (ISO 8601 weeks, default), 0 = Sunday.
+
+                                                 *denote-journal.title_format*
+`journal.title_format` is an |os.date()| format for new entry titles, or a
+table mapping an interval to a format. When nil (default) the per-interval
+defaults are used:
+    daily   "%A %e %B %Y"     weekly  "Week %V %G"
+    monthly "%B %Y"           yearly  "%Y"
+`%V` / `%G` (ISO week / week-based year) are expanded portably.
+
+:Denote journal_calendar [{date}]                  *:Denote-journal_calendar*
+    Open a floating month calendar on the month of {date} (default: today).
+    Days with a journal entry are highlighted, as with Emacs
+    `denote-journal-calendar-mode`. Keys:
+        h / l          previous / next day
+        k / j          previous / next week
+        [ / ] or H / L previous / next month
+        { / }          previous / next year
+        t              go to today
+        F or <CR>      visit the entry of the day at point (prompt if several)
+        N              visit or create the entry for the period containing
+                       the day at point (respects `journal.interval`)
+        q / <Esc>      close
+        g?             help
+    Lua: `require("denote").journal_calendar({ date = "2026-11-01" })`
+    Default global keymap: `<leader>nC`.
+
+Highlight groups:
+    DenoteJournalCalendarEntry    days with an entry (links to |hl-Special|)
+    DenoteJournalCalendarToday    today (links to |hl-Todo|)
+    DenoteJournalCalendarHeader   month title (links to |hl-Title|)
+    DenoteJournalCalendarWeekday  weekday header row (links to |hl-Comment|)
+
+==============================================================================
+13. CAPTURE TEMPLATES                                         *denote-capture*
+
+:Denote capture [{key}]                                       *:Denote-capture*
+:[range]DenoteCapture [{key}]                                 *:DenoteCapture*
+    Create a note from a capture template, the Neovim analogue of Emacs
+    `denote-org-capture`. Without {key}, pick one from `capture.templates`.
+    With a range (visual mode `<leader>nx`) the selection becomes `%i`. A
+    template with `target` appends to an existing note instead ("journal" =
+    today's journal entry).
+
+                                                       *denote-config-capture*
+`capture` is a table with:
+  - `specifiers`  Body used when a template has no `template`
+                  (default "%l\n%i\n%?", like `denote-org-capture-specifiers`).
+  - `templates`   A list of entries: { key, description?, template?, title?,
+                  keywords?, file_type?, subdirectory?, signature?, date?,
+                  prompts?, target?, open?, save? }. Fields left unset are
+                  asked through the normal Denote prompts. `title` and
+                  `signature` may contain escapes. `target` is "journal",
+                  `{ identifier = ... }`, `{ path = ... }`, or a function
+                  returning a path.
+
+Example: >lua
+  capture = {
+    templates = {
+      { key = "n", description = "Note" },
+      { key = "m", description = "Meeting", title = "Meeting with %^{Who}",
+        keywords = { "meeting" }, template = "* Agenda\n%?\n* Context\n%a\n%i" },
+      { key = "j", description = "Journal", target = "journal",
+        template = "- %U %^{Entry}\n%i" },
+    },
+  },
+<
+                                                      *denote-capture-escapes*
+Escapes work in capture templates and in string `templates`:
+  %^{Prompt}  %^{Prompt|default}  prompt (|vim.ui.input()|); reused by name
+  %\N         answer of the Nth prompt
+  %i          selected text / region       %x   clipboard (+, then ")
+  %a  %l      link to origin (denote: link for notes, path:line otherwise)
+  %f  %F      origin file name / full path %n   user name
+  %t  %T      <2026-11-24 Tue> / <2026-11-24 Tue 16:30>
+  %u  %U      [2026-11-24 Tue] / [2026-11-24 Tue 16:30]
+  %?          cursor position after creation   %%  literal %
+Lines containing only escapes that expand to nothing are removed. Not
+supported: Org's `%^t` date prompts, `%<fmt>`, `%k`/`%K`, and choice lists in
+`%^{P|a|b}` (only the first option is used, as the default).
+
 vim:tw=78:ts=8:ft=help:norl:

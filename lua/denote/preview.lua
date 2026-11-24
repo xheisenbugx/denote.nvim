@@ -148,9 +148,9 @@ function M.open(link)
   vim.b[buf].denote_preview_path = path
 
   local ns = vim.api.nvim_create_namespace("denote_preview")
-  pcall(vim.api.nvim_buf_add_highlight, buf, ns, "DenoteTitle", 0, 0, -1)
-  pcall(vim.api.nvim_buf_add_highlight, buf, ns, "DenoteIdentifier", 1, 0, -1)
-  pcall(vim.api.nvim_buf_add_highlight, buf, ns, "DenoteDelimiter", 2, 0, -1)
+  utils.add_highlight(buf, ns, "DenoteTitle", 0, 0, -1)
+  utils.add_highlight(buf, ns, "DenoteIdentifier", 1, 0, -1)
+  utils.add_highlight(buf, ns, "DenoteDelimiter", 2, 0, -1)
 
   local width = 20
   for _, l in ipairs(lines) do

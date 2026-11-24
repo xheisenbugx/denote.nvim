@@ -12,9 +12,9 @@ Emacs Denote, rebuilt for Neovim in pure Lua                            *denote*
  Folgezettel sequences.
 
  `require("denote")` re-exports the commands of the modules below. Besides
- the functions listed here, `backlinks()`, `preview()`, and `explorer()` are
- the same as |denote.backlinks.open|, |denote.preview.open|, and
- |denote.explorer.open|.
+ the functions listed here, `backlinks()`, `preview()`, `explorer()`, and
+ `capture()` are the same as |denote.backlinks.open|, |denote.preview.open|,
+ |denote.explorer.open|, and |denote.capture.capture|.
 
 M.setup({opts?})                                                  *denote.setup*
      Initialize denote.nvim with user configuration.
@@ -222,6 +222,9 @@ M.journal_link_or_create_entry()           *denote.journal_link_or_create_entry*
      Same as `require("denote.journal").link_or_create_entry()`.
 
 
+M.journal_calendar()                                   *denote.journal_calendar*
+
+
 M.sequence_new_parent()                             *denote.sequence_new_parent*
      Same as |denote.sequence.new_parent|.
 
@@ -298,11 +301,10 @@ denote.FileTypeSpec                                        *denote.FileTypeSpec*
 denote.JournalConfig                                      *denote.JournalConfig*
 
     Fields: ~
-        {directory?}    (string|nil)  Directory for journal entries (nil -> <directory>/journal or <directory>)
-        {keyword}       (string)      Keyword tag added to journal entries
-        {title_format}  (string)      os.date format for journal note titles (e.g. "%A %e %B %Y")
-        {file_type?}    (string|nil)  Override default file_type for journal entries
-        {template?}     (string|nil)  Template name for journal entries
+        {directory?}     (string|nil)                       Directory for journal entries (nil -> <directory>/journal or <directory>)
+        {keyword}        (string)                           Keyword tag added to journal entries
+        {title_format?}  (string|table<string,string>|nil)  os.date format for titles; nil -> per-interval default, a table maps interval -> format
+        {interval?}      ()
 
 
 denote.SequenceConfig                                    *denote.SequenceConfig*
@@ -376,21 +378,32 @@ Creating Denote notes (interactive prompts, templates, open-or-create, region)
 denote.CreateOpts                                            *denote.CreateOpts*
 
     Fields: ~
-        {title?}         (string)
-        {keywords?}      (string[]|string)
-        {file_type?}     (string)
-        {subdirectory?}  (string)                       Subdirectory relative to `dir` (or absolute path)
-        {date?}          (string|integer)               Date string or Unix timestamp
-        {template?}      (string)                       Template key from `config.opts.templates`
-        {signature?}     (string)
-        {body?}          (string)                       Extra body text appended after front matter / template
-        {dir?}           (string)                       Explicit root directory override
-        {open?}          (boolean)                      Open the created note in Neovim (default: true)
-        {how?}           (string)                       Window open mode ("edit", "split", "vsplit", "tab")
-        {save?}          (boolean)                      Override `save_buffer_after_creation`
-        {prompts?}       (string[])                     Override prompt sequence for interactive creation
-        {interactive?}   (boolean)                      When false, create synchronously without prompting
-        {on_created?}    (fun(path:string,meta:table))  Callback after note is created
+        {title?}           (string)
+        {keywords?}        (string[]|string)
+        {file_type?}       (string)
+        {subdirectory?}    (string)                       Subdirectory relative to `dir` (or absolute path)
+        {date?}            (string|integer)               Date string or Unix timestamp
+        {template?}        (string)                       Template key from `config.opts.templates`
+        {signature?}       (string)
+        {body?}            (string)                       Extra body text appended after front matter / template
+        {dir?}             (string)                       Explicit root directory override
+        {open?}            (boolean)                      Open the created note in Neovim (default: true)
+        {how?}             (string)                       Window open mode ("edit", "split", "vsplit", "tab")
+        {save?}            (boolean)                      Override `save_buffer_after_creation`
+        {prompts?}         (string[])                     Override prompt sequence for interactive creation
+        {interactive?}     (boolean)                      When false, create synchronously without prompting
+        {on_created?}      (fun(path:string,meta:table))  Callback after note is created
+        {body_template?}   (string)                       Body with capture escapes (`%^{Prompt}`, `%i`, `%a`, `%?`, ...)
+        {context?}         (denote.CaptureContext)        Capture context for template escapes (origin, region, answers)
+        {_initial_title?}  (string)                       Internal: default text for the title prompt
+        {_silo_dir?}       (string)                       Internal: create the note inside this silo
+
+
+denote.RegionOpts : denote.CreateOpts                        *denote.RegionOpts*
+
+    Fields: ~
+        {line1?}  (integer)  First line of the region (default: `'<`)
+        {line2?}  (integer)  Last line of the region (default: `'>`)
 
 
 M.create_sync({opts})                                *denote.create.create_sync*
@@ -457,7 +470,7 @@ M.open_or_create({opts?})                         *denote.create.open_or_create*
      (`denote-open-or-create`).
 
     Parameters: ~
-        {opts?}  ({dir?:string,prompts?:string[]})
+        {opts?}  (denote.CreateOpts)
 
 
                                      *denote.create.open_or_create_with_command*
@@ -474,7 +487,437 @@ M.region({opts?})                                         *denote.create.region*
      Markdown fenced code block matching the target note's syntax.
 
     Parameters: ~
-        {opts?}  (denote.CreateOpts)  & { line1?: integer, line2?: integer }
+        {opts?}  (denote.RegionOpts)
+
+
+==============================================================================
+Capture templates (the Neovim analogue of `denote-org-capture`) *denote.capture*
+
+denote.CaptureOrigin                                      *denote.CaptureOrigin*
+
+    Fields: ~
+        {bufnr?}     (integer)
+        {path?}      (string)
+        {lnum?}      (integer)
+        {filetype?}  (string)
+
+
+denote.CaptureContext                                    *denote.CaptureContext*
+
+    Fields: ~
+        {origin?}   (denote.CaptureOrigin)  Where the capture was started from
+        {region?}   (string)                Text for `%i`
+        {answers?}  (table<string,string>)  Prompt answers keyed by prompt name (pre-supplied or collected)
+        {syntax?}   ()
+
+
+denote.CaptureTemplate                                  *denote.CaptureTemplate*
+
+    Fields: ~
+        {key}            (string)                                        Key used by `:Denote capture <key>` and shown in the picker
+        {description?}   (string)
+        {template?}      (string|fun(ctx:denote.CaptureContext):string)  Body (default: `capture.specifiers`)
+        {title?}         (string|fun(ctx:denote.CaptureContext):string)  May contain escapes (e.g. `%^{Title}`)
+        {keywords?}      (string[]|string)
+        {file_type?}     (string)
+        {subdirectory?}  (string)
+        {signature?}     (string|fun(ctx:denote.CaptureContext):string)
+        {date?}          (string|integer)
+        {dir?}           (string)
+        {prompts?}       (string[])                                      Denote prompts for fields left unset (default: `config.prompts`)
+        {target?}        ()
+
+
+M.prompts({template?})                                  *denote.capture.prompts*
+     Return the distinct prompts of `template` in order of first appearance.
+
+    Parameters: ~
+        {template?}  (string)
+
+    Returns: ~
+        ({name:string,default?:string}[])
+
+
+M.ask({templates}, {answers}, {done})                       *denote.capture.ask*
+     Ask (asynchronously, via `vim.ui.input`) every `%^{...}` prompt of `templates` that has no
+     answer in `answers` yet, then call `done(answers)`. Cancelling a prompt aborts. When nothing
+     needs asking (or the prompts complete synchronously), `done`'s result is returned.
+
+    Parameters: ~
+        {templates}  (string|nil[])
+        {answers}    (table<string,string>)
+        {done}       (fun(answers:table<string,string>):any)
+
+    Returns: ~
+        (any)
+
+
+M.syntax_for({file_type?})                           *denote.capture.syntax_for*
+     Map a Denote file type to a link syntax.
+
+    Parameters: ~
+        {file_type?}  (string)  @return "org"|"markdown"|"text"
+
+
+M.origin({bufnr?})                                       *denote.capture.origin*
+     Describe the current buffer/cursor as a capture origin.
+
+    Parameters: ~
+        {bufnr?}  (integer)
+
+    Returns: ~
+        (denote.CaptureOrigin)
+
+
+M.origin_link({ctx})                                *denote.capture.origin_link*
+     Link back to the capture origin (`%a` / `%l`).
+
+    Parameters: ~
+        {ctx}  (denote.CaptureContext)
+
+    Returns: ~
+        (string)
+
+
+M.expand_sync()                                     *denote.capture.expand_sync*
+
+
+M.expand({template}, {ctx?}, {cb})                       *denote.capture.expand*
+     Prompt for missing answers, then expand `template` and call `cb(text, cursor)`.
+
+    Parameters: ~
+        {template}  (string)
+        {ctx?}      (denote.CaptureContext)
+        {cb}        (fun(text:string,cursor:integer|nil):any)
+
+    Returns: ~
+        (any)
+
+
+M.finalize({content}, {cursor?})                       *denote.capture.finalize*
+     Ensure `content` ends with a newline; when `cursor` is at the very end, add an empty line
+     for it to land on.
+
+    Parameters: ~
+        {content}  (string)
+        {cursor?}  (integer)
+
+    Returns: ~
+        (string)
+
+
+M.offset_to_pos({content}, {offset})              *denote.capture.offset_to_pos*
+     Convert a 1-based byte offset into a `{ row, col }` window cursor (row 1-based, col 0-based).
+
+    Parameters: ~
+        {content}  (string)
+        {offset}   (integer)
+
+    Returns: ~
+        (integer[])
+
+
+M.region_text({bufnr?}, {line1}, {line2})           *denote.capture.region_text*
+     Text of lines `line1..line2` of `bufnr`; uses the exact (charwise / blockwise) visual
+     selection when the `'<`/`'>` marks match the range.
+
+    Parameters: ~
+        {bufnr?}  (integer)
+        {line1}   (integer)
+        {line2}   (integer)
+
+    Returns: ~
+        (string)
+
+
+M.templates()                                         *denote.capture.templates*
+     The configured capture templates (a single default note template when none are configured).
+
+    Returns: ~
+        (denote.CaptureTemplate[])
+
+
+M.resolve_target({target}, {ctx})                *denote.capture.resolve_target*
+     Resolve an append target into a file path.
+
+    Parameters: ~
+        {target}  (any)
+        {ctx}     (denote.CaptureContext)
+
+    Returns: ~
+        (string|nil)
+
+
+M.append({path}, {text}, {cursor?}, {opts?})             *denote.capture.append*
+     Append `text` at the end of the note at `path` (separated by a blank line).
+
+    Parameters: ~
+        {path}     (string)
+        {text}     (string)
+        {cursor?}  (integer)                                    Byte offset of the cursor in `text`
+        {opts?}    ({open?:boolean,how?:string,save?:boolean})
+
+    Returns: ~
+        ({path:string,bufnr?:integer,cursor:integer[]})
+
+
+M.run({entry}, {ctx}, {opts?})                              *denote.capture.run*
+     Run one capture template: create a new note, or append to `entry.target`.
+
+    Parameters: ~
+        {entry}  (denote.CaptureTemplate)
+        {ctx}    (denote.CaptureContext)
+        {opts?}  ({open?:boolean,how?:string,save?:boolean,interactive?:boolean})
+
+    Returns: ~
+        (any)  Created note meta / append result (when no prompt was needed)
+
+
+denote.CaptureOpts                                          *denote.CaptureOpts*
+
+    Fields: ~
+        {key?}          (string)                  Capture template key (picker when omitted and several are configured)
+        {entry?}        (denote.CaptureTemplate)  Use this template directly
+        {region?}       (string)                  Text for `%i`
+        {line1?}        (integer)                 Take `%i` from lines `line1..line2` of the current buffer
+        {line2?}        (integer)
+        {answers?}      (table<string,string>)    Pre-supplied prompt answers
+        {origin?}       (denote.CaptureOrigin)
+        {open?}         (boolean)
+        {how?}          (string)
+        {save?}         (boolean)
+        {interactive?}  (boolean)                 When false, never prompt (prompts use their defaults)
+
+
+M.capture({opts?})                                      *denote.capture.capture*
+     Capture a note from a capture template (`:Denote capture [key]`, `:DenoteCapture`).
+
+    Parameters: ~
+        {opts?}  (denote.CaptureOpts)
+
+    Returns: ~
+        (any)
+
+
+M.keys()                                                   *denote.capture.keys*
+     Keys of the configured capture templates (for command completion).
+
+    Returns: ~
+        (string[])
+
+
+==============================================================================
+Journal entries (matching `denote-journal`)                     *denote.journal*
+
+M.directory()                                         *denote.journal.directory*
+     Return the configured journal directory (defaults to `<denote.directory>/journal` if configured,
+     otherwise `<denote.directory>`).
+
+    Returns: ~
+        (string)
+
+
+M.keyword()                                             *denote.journal.keyword*
+     Return the journal keyword slug (default: `"journal"`).
+
+    Returns: ~
+        (string)
+
+
+M.interval()                                           *denote.journal.interval*
+     Return the configured journal interval (`denote-journal-interval`). Unknown values are
+     treated as `"daily"`, like Emacs.
+    @return "daily"|"weekly"|"monthly"|"yearly"
+
+
+M.week_start()                                       *denote.journal.week_start*
+     First day of the week: 1 = Monday (ISO 8601, default), 0 = Sunday.
+
+    Returns: ~
+        (integer)
+
+
+M.iso_week()                                           *denote.journal.iso_week*
+
+
+M.period_bounds()                                 *denote.journal.period_bounds*
+
+
+M.format_title({ts}, {interval?})                  *denote.journal.format_title*
+     Format a journal entry title for Unix timestamp `ts`. `%V`/`%G` are expanded to the
+     ISO week number / week-based year portably (also on platforms whose strftime lacks them).
+
+    Parameters: ~
+        {ts}         (integer)
+        {interval?}  (string)   (default: configured interval)
+
+    Returns: ~
+        (string)
+
+
+M.entries()                                             *denote.journal.entries*
+     List all journal entries: Denote files in the journal directory whose keywords include the
+     journal keyword (any Denote file when the keyword is empty), sorted by path.
+
+    Returns: ~
+        ({path:string,identifier:string,time:integer}[])
+
+
+M.entries_by_date({opts?})                      *denote.journal.entries_by_date*
+     Group journal entries by the day of their identifier.
+     With `year`/`month` given, only entries from that month are included.
+
+    Parameters: ~
+        {opts?}  ({year?:integer,month?:integer})
+
+    Returns: ~
+        (table<string,string[]>)  of `YYYYMMDD` -> sorted paths
+
+
+M.find_for_period({ts}, {interval?})            *denote.journal.find_for_period*
+     Find existing journal entries whose identifier date is in the same `interval` period as `ts`.
+
+    Parameters: ~
+        {ts}         (integer)
+        {interval?}  (string)   (default: configured interval)
+
+    Returns: ~
+        (string[])
+
+
+M.find_for_date({ts})                             *denote.journal.find_for_date*
+     Find existing journal entries for the exact day of `ts` (`YYYYMMDD` + journal keyword).
+
+    Parameters: ~
+        {ts}  (integer)
+
+    Returns: ~
+        (string[])
+
+
+M.new_entry({opts?})                                  *denote.journal.new_entry*
+     Create a new journal entry (`denote-journal-new-entry`).
+
+    Parameters: ~
+        {opts?}  ({date?:string|integer,open?:boolean,save?:boolean,title?:string,extra_keywords?:string[]})
+
+    Returns: ~
+        (table)  meta
+
+
+M.new_or_existing_entry()                 *denote.journal.new_or_existing_entry*
+
+
+M.link_or_create_entry({opts?})            *denote.journal.link_or_create_entry*
+     Insert a link in the current buffer to today's (or `opts.date`'s) journal entry,
+     creating the entry first if it does not exist (`denote-journal-link-or-create-entry`).
+
+    Parameters: ~
+        {opts?}  ({date?:string|integer,id_only?:boolean})
+
+    Returns: ~
+        (string)  path
+
+
+==============================================================================
+Journal calendar (matching `denote-journal-calendar-mode`)     *denote.calendar*
+
+M.setup_highlights()                          *denote.calendar.setup_highlights*
+     Define the calendar highlight groups (only if the user has not defined them).
+
+
+M.days_in_month({year}, {month})                 *denote.calendar.days_in_month*
+     Number of days in `month` of `year`.
+
+    Parameters: ~
+        {year}   (integer)
+        {month}  (integer)
+
+    Returns: ~
+        (integer)
+
+
+M.weekday()                                            *denote.calendar.weekday*
+     Weekday of a date: 1 = Sunday .. 7 = Saturday (like `os.date("*t").wday`).
+
+    Returns: ~
+        (integer)
+
+
+M.weekday_names({week_start?})                   *denote.calendar.weekday_names*
+     Weekday column headers starting at `week_start` (1 = Monday, 0 = Sunday).
+
+    Parameters: ~
+        {week_start?}  (integer)
+
+    Returns: ~
+        (string[])
+
+
+M.month_grid({year}, {month}, {week_start?})        *denote.calendar.month_grid*
+     Lay out a month as weeks of 7 cells. Each cell is the day number, or `false` for
+     padding before the 1st / after the last day.
+
+    Parameters: ~
+        {year}         (integer)
+        {month}        (integer)
+        {week_start?}  (integer)  1 = Monday (default: `journal.week_start`), 0 = Sunday
+
+    Returns: ~
+        (integer|false[][])
+
+
+denote.CalendarState                                      *denote.CalendarState*
+
+    Fields: ~
+        {buf}    (integer)
+        {win}    (integer)
+        {year}   (integer)
+        {month}  (integer)
+        {day}    (integer)
+        {cells}  (table)
+
+
+M.state()                                                *denote.calendar.state*
+     Return the calendar state (for tests / integrations), or nil if closed.
+
+    Returns: ~
+        (denote.CalendarState|nil)
+
+
+M.date_at_point()                                *denote.calendar.date_at_point*
+     Timestamp (noon) of the day at point, or nil when the calendar is closed.
+
+    Returns: ~
+        (integer|nil)
+
+
+M.goto_date({ts})                                    *denote.calendar.goto_date*
+     Move the cursor to a date (re-rendering when the month changes).
+
+    Parameters: ~
+        {ts}  (integer)
+
+
+M.close()                                                *denote.calendar.close*
+     Close the calendar float.
+
+
+M.find_file()                                        *denote.calendar.find_file*
+     Visit the journal entry of the day at point (`denote-journal-calendar-find-file`).
+     Prompts when several entries share the day; notifies when there is none.
+
+
+M.new_or_existing()                            *denote.calendar.new_or_existing*
+     Visit or create the journal entry for the period containing the day at point
+     (`denote-journal-calendar-new-or-existing`).
+
+
+M.open({opts?})                                           *denote.calendar.open*
+     Open the journal calendar float on the month of `date` (default: today).
+
+    Parameters: ~
+        {opts?}  ({date?:string|integer})
 
 
 ==============================================================================
@@ -1583,7 +2026,7 @@ M.identifier_to_time({id})                    *denote.naming.identifier_to_time*
      Parse a Denote identifier (`YYYYMMDDTHHMMSS`) back into a Unix timestamp.
 
     Parameters: ~
-        {id}  (string)
+        {id}  (string|nil)
 
     Returns: ~
         (integer|nil)
@@ -1901,18 +2344,26 @@ M.new_parent({opts?})                               *denote.sequence.new_parent*
         {opts?}  (denote.CreateOpts)
 
 
+denote.SequenceCreateOpts : denote.CreateOpts        *denote.SequenceCreateOpts*
+
+    Fields: ~
+        {parent_signature?}   (string)   Parent sequence for `new_child` (prompted when absent)
+        {sibling_signature?}  (string)   Sibling sequence for `new_sibling` (prompted when absent)
+        {pick?}               (boolean)  Always pick the base note with a picker
+
+
 M.new_child({opts?})                                 *denote.sequence.new_child*
      Create a child sequence note (`denote-sequence-new-child`).
 
     Parameters: ~
-        {opts?}  (denote.CreateOpts)  & { parent_signature?: string, pick?: boolean }
+        {opts?}  (denote.SequenceCreateOpts)
 
 
 M.new_sibling({opts?})                             *denote.sequence.new_sibling*
      Create a sibling sequence note (`denote-sequence-new-sibling`).
 
     Parameters: ~
-        {opts?}  (denote.CreateOpts)  & { sibling_signature?: string, pick?: boolean }
+        {opts?}  (denote.SequenceCreateOpts)
 
 
 M.find({opts?})                                           *denote.sequence.find*
@@ -1977,7 +2428,7 @@ M.with_silo({silo_dir}, {fn})                            *denote.silo.with_silo*
 
     Parameters: ~
         {silo_dir}  (string)
-        {fn}        (fun())
+        {fn}        (fun():any)
 
     Returns: ~
         (any)

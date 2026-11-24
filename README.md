@@ -65,6 +65,12 @@ return {
 }
 ```
 
+With [rocks.nvim](https://github.com/nvim-neorocks/rocks.nvim):
+
+```vim
+:Rocks install denote.nvim
+```
+
 ### Pairing with [org.nvim](https://github.com/xheisenbugx/org.nvim)
 
 No extra glue code needed — set `file_type = "org"` (or mix `.org` and `.md` notes freely in the same directory) and `denote.nvim` automatically hooks into `org.nvim`:
@@ -153,7 +159,9 @@ Browse sequence relatives (`<leader>nzr` — parent, siblings, children), spawn 
 | 🩺 | **Diagnostics, preview & reports** | Broken links reported via `vim.diagnostic` (`]d`, quickfix, Trouble); `K` hover preview of the linked note; `:Denote unlinked_mentions` + `:Denote link_mention`; `:Denote check` for broken links & orphan notes |
 | ⚡ | **Cached file index** | Directory listings and identifier lookups are cached and revalidated with one `stat` per directory, so large vaults stay snappy (`make bench`) |
 | 🗂️ | **Interactive Explorer** | Dired / `denote-menu` / `denote-sort-dired` buffer with colorized filename components, regexp & keyword filters, sorting by identifier / title / keywords / signature / mtime, reverse order, file marking, single & batch renaming, and deletion |
-| 📓 | **Daily Journal** | Drop-in `denote-journal` support: `:Denote journal [date]` (open existing or create), `journal_new`, and `journal_link`, supporting flexible dates (`yesterday`, `tomorrow`, `-2d`, `2026-11-23`) |
+| 📓 | **Journal** | Drop-in `denote-journal` support: `:Denote journal [date]` (open existing or create), `journal_new`, and `journal_link`, supporting flexible dates (`yesterday`, `tomorrow`, `-2d`, `2026-11-23`); **daily, weekly (ISO), monthly, or yearly** entries (`journal.interval`, like `denote-journal-interval`) |
+| 📅 | **Journal calendar** | `:Denote journal_calendar` (`<leader>nC`): floating month view highlighting days with entries (`denote-journal-calendar-mode`); `F`/`<CR>` visit, `N` new-or-existing, `h/j/k/l` move, `[`/`]` month, `{`/`}` year, `t` today |
+| 📥 | **Capture templates** | `:Denote capture` (`<leader>nx`, also in visual mode): the Neovim take on `denote-org-capture`, with Org-capture escapes (`%^{Prompt\|default}`, `%i`, `%a`/`%l`, `%x`, `%t`/`%U`, `%?`, …) in capture templates and string `templates`; append to an existing note or today's journal |
 | 🌳 | **Sequences (Folgezettel)** | Drop-in `denote-sequence` support for both **numeric** (`1`, `1=1`, `1=2`, `1=1=1`) and **alphanumeric** (`1`, `1a`, `1b`, `1a1`) schemes: `new_parent`, `new_child`, `new_sibling`, `find_relatives`, `link`, `reparent`, and sequence-aware natural sorting |
 | 🏛️ | **Silos** | Keep isolated note repositories (`silos = { "~/work-notes" }`) or drop a `.denote.json` / `.denote.lua` file in any directory for automatic directory-local overrides (Neovim equivalent of `.dir-locals.el`) |
 | 🦄 | **org.nvim integration** | Native `denote:` link type (`follow`, `store`, `export`, `face`) + Org dynamic blocks (`denote-links`, `denote-backlinks`, `denote-files`) that work both with `org.nvim` and standalone |
@@ -238,6 +246,8 @@ Every action is available via `:Denote <subcommand>` (with tab completion) and d
 | `<leader>nK` | `:Denote keywords_remove` | `denote-keywords-remove` | Remove keyword(s) from current file |
 | `<leader>nj` | `:Denote journal` | `denote-journal-new-or-existing-entry` | Open or create today's journal entry |
 | `<leader>nJ` | `:Denote journal_link` | `denote-journal-link-or-create-entry` | Link to today's journal entry |
+| `<leader>nC` | `:Denote journal_calendar [date]` | `denote-journal-calendar-mode` | Month calendar of journal entries |
+| `<leader>nx` | `:Denote capture [key]` / `:'<,'>DenoteCapture [key]` | `denote-org-capture` | Capture a note from a capture template (selection becomes `%i`) |
 | `<leader>nzp` | `:Denote sequence_parent` | `denote-sequence-new-parent` | Create next top-level sequence note (`1`, `2`, ...) |
 | `<leader>nzc` | `:Denote sequence_child` | `denote-sequence-new-child` | Create next child sequence note (`1=1` or `1a`) |
 | `<leader>nzs` | `:Denote sequence_sibling` | `denote-sequence-new-sibling` | Create next sibling sequence note (`1=2` or `1b`) |
@@ -298,13 +308,28 @@ require("denote").setup({
     -- "~/work-notes",
   },
 
-  -- Daily journal (`denote-journal`)
+  -- Journal (`denote-journal`)
   journal = {
     directory = nil, -- nil uses `directory`; set e.g. "~/Documents/notes/journal"
     keyword = "journal",
-    title_format = "%A %e %B %Y",
+    interval = "daily", -- "daily", "weekly" (ISO weeks), "monthly", or "yearly"
+    week_start = 1, -- 1 = Monday (ISO 8601), 0 = Sunday; also the calendar's first column
+    -- nil = per-interval defaults ("%A %e %B %Y", "Week %V %G", "%B %Y", "%Y");
+    -- a string, or a table keyed by interval
+    title_format = nil,
     file_type = nil,
     template = nil,
+  },
+
+  -- Capture templates (`denote-org-capture`)
+  capture = {
+    specifiers = "%l\n%i\n%?", -- body when a capture template has no `template`
+    templates = {
+      -- { key = "n", description = "Note" },
+      -- { key = "m", description = "Meeting", title = "Meeting with %^{Who}", keywords = { "meeting" },
+      --   template = "* Agenda\n%?\n* Context\n%a\n%i" },
+      -- { key = "j", description = "Journal", target = "journal", template = "- %U %^{Entry}\n%i" },
+    },
   },
 
   -- Sequences / Folgezettel (`denote-sequence`)
@@ -387,9 +412,44 @@ Display the human-readable title of the active Denote note (matching Emacs `deno
 
 ---
 
+### Capture templates
+
+Capture templates work like Org capture: pick a template, answer its prompts, and the note is created (or the text appended to an existing note). The same escapes also work in string `templates`.
+
+```lua
+require("denote").setup({
+  templates = { meeting = "## %^{Topic|General}\n\n%?\n\nCaptured: %U" },
+  capture = {
+    templates = {
+      { key = "n", description = "Note" }, -- normal Denote prompts + `specifiers`
+      { key = "m", description = "Meeting", title = "Meeting with %^{Who}", keywords = { "meeting" },
+        template = "* Agenda\n%?\n* Context\n%a\n%i" },
+      { key = "j", description = "Journal", target = "journal", template = "- %U %^{Entry}\n%i" },
+    },
+  },
+})
+```
+
+| Escape | Expands to |
+| --- | --- |
+| `%^{Prompt}` / `%^{Prompt\|default}` | Prompt (asked once per name); `%\1` reuses the first answer |
+| `%i` | Selected text (visual `<leader>nx` / `:'<,'>DenoteCapture`) |
+| `%a` / `%l` | Link back to where you captured from (`denote:` link for notes, `path:line` otherwise) |
+| `%x` | Clipboard |
+| `%f` / `%F` | Origin file name / path |
+| `%t` / `%T` / `%u` / `%U` | `<date>` / `<date time>` / `[date]` / `[date time]` |
+| `%n` | User name |
+| `%?` | Cursor position after creation |
+| `%%` | A literal `%` |
+
+`target` can be `"journal"` (today's journal entry), `{ identifier = "…" }`, `{ path = "…" }`, or a function returning a path.
+
+---
+
 ## 📚 Documentation
 
 - **Vimdoc manual**: `:h denote.nvim` ([`doc/denote.txt`](doc/denote.txt))
+- **Lua API reference**: `:h denote-api.txt` ([`doc/denote-api.txt`](doc/denote-api.txt)), generated from the code's annotations
 - **Health check**: `:checkhealth denote`
 
 ---
@@ -405,7 +465,16 @@ make test SPEC=tests/spec/naming_spec.lua  # run a single spec
 make bench N=10000                         # time common operations on a generated vault
 make lint                                  # stylua --check
 make format                                # format Lua files with stylua
+make typecheck                             # lua-language-server --check (see .luarc.json)
+make docs                                  # regenerate doc/denote-api.txt (needs vimcats)
+make fixtures                              # regenerate Emacs Denote golden fixtures (needs Emacs)
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, docs, and fixtures.
+
+### Compatibility testing
+
+denote.nvim's file names, front matter, and links are checked against the real Emacs Denote. `make fixtures` runs Emacs in batch mode with the current Denote from GNU ELPA and records its output for a fixed set of inputs in [`tests/fixtures/emacs/denote.json`](tests/fixtures/emacs/denote.json). [`tests/spec/emacs_parity_spec.lua`](tests/spec/emacs_parity_spec.lua), part of `make test`, asserts that denote.nvim produces byte-identical results. A weekly CI job regenerates the fixtures so new Denote releases show up as diffs. Deliberate deviations are listed, with reasons, in `KNOWN_DIFFERENCES` in that spec.
 
 ## License
 

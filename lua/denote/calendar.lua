@@ -107,6 +107,7 @@ end
 ---@field month integer
 ---@field day integer
 ---@field cells table<integer, { [1]: integer, [2]: integer }> day -> { row (0-based), col (0-based) }
+---@field moving? boolean True while the cursor is being moved programmatically
 
 ---@type denote.CalendarState|nil
 local state = nil

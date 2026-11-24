@@ -194,9 +194,11 @@ end
 function M.format(meta)
   local spec, ft = M.get_spec(meta.file_type)
   local title = meta.title or ""
-  local ts = type(meta.date) == "number" and meta.date
+  local ts = (
+    type(meta.date) == "number" and meta.date
     or (meta.identifier and naming.identifier_to_time(meta.identifier))
     or os.time()
+  ) --[[@as integer]]
   local date_str = type(meta.date) == "string" and meta.date or M.format_date(ts, ft)
   local kws = naming.sluggify_keywords(meta.keywords or {})
   local id = meta.identifier or naming.format_identifier(ts)

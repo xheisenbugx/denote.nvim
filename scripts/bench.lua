@@ -61,7 +61,7 @@ time("files.find_by_id (warm)", function()
 end, 100)
 time("frontmatter.extract_title x100 (warm)", function()
   for i = 1, 100 do
-    require("denote.frontmatter").extract_title(files.find_by_id(ids[i]))
+    require("denote.frontmatter").extract_title(files.find_by_id(ids[i]) or "")
   end
 end)
 

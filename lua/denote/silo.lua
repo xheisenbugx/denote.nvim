@@ -88,7 +88,7 @@ end
 --- Run a function `fn` with `config.active_directory` temporarily bound to `silo_dir`
 --- (and any `.denote.json`/`.denote.lua` local overrides applied).
 ---@param silo_dir string
----@param fn fun()
+---@param fn fun(): any
 ---@return any
 function M.with_silo(silo_dir, fn)
   local prev_dir = config.active_directory

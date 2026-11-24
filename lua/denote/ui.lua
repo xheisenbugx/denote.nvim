@@ -70,8 +70,8 @@ function M.broken_links(lines)
   for lnum, line in ipairs(lines) do
     if line:find("denote:", 1, true) then
       for _, link in ipairs(links.parse_line(line, lnum)) do
-        if link.kind == "id" and link.identifier then
-          local id = link.identifier
+        local id = link.kind == "id" and link.identifier or nil
+        if id then
           if known[id] == nil then
             known[id] = files.has_id(id)
           end

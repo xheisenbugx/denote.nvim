@@ -215,7 +215,7 @@ function M.origin_link(ctx)
   if syntax == "org" then
     return string.format("[[file:%s::%d]]", o.path, o.lnum or 1)
   end
-  return o.lnum and (o.path .. ":" .. o.lnum) or o.path
+  return o.lnum and (o.path .. ":" .. o.lnum) or o.path or ""
 end
 
 local function clipboard(ctx)
@@ -582,8 +582,9 @@ end
 function M.capture(opts)
   opts = opts or {}
   local region = opts.region
-  if region == nil and opts.line1 then
-    region = M.region_text(nil, opts.line1, opts.line2 or opts.line1)
+  local line1 = opts.line1
+  if region == nil and line1 then
+    region = M.region_text(nil, line1, opts.line2 or line1)
   end
   local ctx = {
     origin = opts.origin or M.origin(),

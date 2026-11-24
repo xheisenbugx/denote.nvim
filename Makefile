@@ -10,6 +10,16 @@ lint:
 format:
 	stylua lua plugin tests scripts
 
+# Static type check of lua/, plugin/, and scripts/ with lua-language-server (config: .luarc.json).
+# Fails on any Warning-level diagnostic. Override the binary with LUALS=/path/to/lua-language-server.
+LUALS ?= lua-language-server
+typecheck:
+	@export VIMRUNTIME="$${VIMRUNTIME:-$$(nvim --clean --headless -c 'lua io.write(vim.env.VIMRUNTIME)' -c 'qa!')}"; \
+	mkdir -p .cache/luals; \
+	$(LUALS) --check . --checklevel=Warning --logpath .cache/luals --check_format=pretty > .cache/luals/output.txt 2>&1; \
+	cat .cache/luals/output.txt | tr '\r' '\n' | grep -v '^\s*$$' | grep -v '>>>\|Initializing' ; \
+	grep -q "no problems found" .cache/luals/output.txt
+
 # Benchmark against a generated vault: make bench N=10000
 bench:
 	@nvim --headless -u tests/minimal_init.lua -l scripts/bench.lua $(N)
@@ -28,7 +38,7 @@ fixtures:
 VIMCATS ?= vimcats
 VIMCATS_FLAGS ?= --prefix-func --prefix-type
 # Modules rendered into doc/denote-api.txt, in this order.
-API_MODULES := init config create links backlinks query search preview report \
+API_MODULES := init config create capture journal calendar links backlinks query search preview report \
 	rename frontmatter naming files explorer sequence silo
 API_SOURCES := $(patsubst %,lua/denote/%.lua,$(API_MODULES))
 

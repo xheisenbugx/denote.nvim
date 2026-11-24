@@ -722,7 +722,9 @@ function M.add_links(regexp, opts)
           desc = tostring(os.date("%Y-%m-%d", ts)) .. "  " .. desc
         end
       end
-      out[#out + 1] = "- " .. M.format_link(id, desc, { syntax = syntax, id_only = opts.id_only, file_path = path })
+      if id then
+        out[#out + 1] = "- " .. M.format_link(id, desc, { syntax = syntax, id_only = opts.id_only, file_path = path })
+      end
     end
 
     local lnum = math.min(origin_lnum, vim.api.nvim_buf_line_count(bufnr))

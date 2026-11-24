@@ -47,9 +47,10 @@ end
 function M.resolve_backend()
   local pref = config.opts.picker or "auto"
   if pref ~= "auto" then
-    return pref
+    return pref --[[@as "snacks"|"fzf-lua"|"telescope"|"mini"|"select"]]
   end
-  if _G.Snacks and _G.Snacks.picker then
+  local snacks = rawget(_G, "Snacks")
+  if snacks and snacks.picker then
     return "snacks"
   end
   if pcall(require, "fzf-lua") then
@@ -137,7 +138,7 @@ local function pick_snacks(spec)
     end)
   end
 
-  _G.Snacks.picker.pick({
+  rawget(_G, "Snacks").picker.pick({
     title = spec.title,
     items = snacks_items,
     layout = spec.preview == false and { preset = "select" } or nil,

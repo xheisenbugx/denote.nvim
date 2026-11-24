@@ -6,9 +6,9 @@
 --- Folgezettel sequences.
 ---
 --- `require("denote")` re-exports the commands of the modules below. Besides
---- the functions listed here, `backlinks()`, `preview()`, and `explorer()` are
---- the same as |denote.backlinks.open|, |denote.preview.open|, and
---- |denote.explorer.open|.
+--- the functions listed here, `backlinks()`, `preview()`, `explorer()`, and
+--- `capture()` are the same as |denote.backlinks.open|, |denote.preview.open|,
+--- |denote.explorer.open|, and |denote.capture.capture|.
 ---@brief ]]
 
 local config = require("denote.config")
@@ -73,6 +73,7 @@ end
 M.region = function(...)
   return require("denote.create").region(...)
 end
+---@nodoc
 M.capture = function(...)
   return require("denote.capture").capture(...)
 end
@@ -173,8 +174,8 @@ M.follow_target = function(...)
   return require("denote.links").follow_target(...)
 end
 --- Same as |denote.links.find_link|.
-M.find_link = function(...)
-  return require("denote.links").find_link(...)
+M.find_link = function()
+  return require("denote.links").find_link()
 end
 --- Same as |denote.links.convert_links_to_file_paths|.
 M.convert_links_to_file_paths = function(...)
@@ -317,8 +318,8 @@ M.org_dblock_insert_links = function(...)
   return require("denote.integrations.org").dblock_insert_links(...)
 end
 --- Same as `require("denote.integrations.org").dblock_insert_backlinks()`.
-M.org_dblock_insert_backlinks = function(...)
-  return require("denote.integrations.org").dblock_insert_backlinks(...)
+M.org_dblock_insert_backlinks = function()
+  return require("denote.integrations.org").dblock_insert_backlinks()
 end
 --- Same as `require("denote.integrations.org").dblock_insert_files()`.
 M.org_dblock_insert_files = function(...)

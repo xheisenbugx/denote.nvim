@@ -102,7 +102,7 @@ local function modified_buffers(allowed)
       if name ~= "" then
         local norm = utils.normalize(name)
         if not allowed[norm] then
-          local real = (vim.uv or vim.loop).fs_realpath(norm)
+          local real = (vim.uv or vim.loop).fs_realpath(norm) --[[@as string?]]
           norm = real or norm
         end
         if allowed[norm] then

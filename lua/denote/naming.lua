@@ -405,7 +405,7 @@ function M.format_identifier(ts)
 end
 
 --- Parse a Denote identifier (`YYYYMMDDTHHMMSS`) back into a Unix timestamp.
----@param id string
+---@param id string|nil
 ---@return integer|nil
 function M.identifier_to_time(id)
   if not id then
@@ -416,12 +416,12 @@ function M.identifier_to_time(id)
     return nil
   end
   return os.time({
-    year = tonumber(y),
-    month = tonumber(m),
-    day = tonumber(d),
-    hour = tonumber(H),
-    min = tonumber(Mi),
-    sec = tonumber(S),
+    year = tonumber(y) --[[@as integer]],
+    month = tonumber(m) --[[@as integer]],
+    day = tonumber(d) --[[@as integer]],
+    hour = tonumber(H) --[[@as integer]],
+    min = tonumber(Mi) --[[@as integer]],
+    sec = tonumber(S) --[[@as integer]],
   })
 end
 

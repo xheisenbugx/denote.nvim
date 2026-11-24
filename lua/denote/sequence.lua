@@ -310,10 +310,15 @@ local function with_base_signature(opts, title, callback)
   })
 end
 
+---@class denote.SequenceCreateOpts: denote.CreateOpts
+---@field parent_signature? string Parent sequence for `new_child` (prompted when absent)
+---@field sibling_signature? string Sibling sequence for `new_sibling` (prompted when absent)
+---@field pick? boolean Always pick the base note with a picker
+
 --- Create a child sequence note (`denote-sequence-new-child`).
----@param opts? denote.CreateOpts & { parent_signature?: string, pick?: boolean }
+---@param opts? denote.SequenceCreateOpts
 function M.new_child(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
   with_base_signature(
     { signature = opts.parent_signature, pick = opts.pick, dir = opts.dir },
     "Parent Sequence Note",
@@ -325,9 +330,9 @@ function M.new_child(opts)
 end
 
 --- Create a sibling sequence note (`denote-sequence-new-sibling`).
----@param opts? denote.CreateOpts & { sibling_signature?: string, pick?: boolean }
+---@param opts? denote.SequenceCreateOpts
 function M.new_sibling(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
   with_base_signature(
     { signature = opts.sibling_signature, pick = opts.pick, dir = opts.dir },
     "Sibling Sequence Note",
@@ -373,6 +378,7 @@ function M.find_relatives(opts)
     utils.warn("Current file does not have a valid sequence signature")
     return
   end
+  ---@cast sig string
   local rel = M.relatives(sig, opts.dir)
   local items = {}
   local function add(label, p)
