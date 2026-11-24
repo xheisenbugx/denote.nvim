@@ -80,6 +80,15 @@ M.defaults = {
   --- Named body templates: { [name] = string | fun(meta: table): string }
   templates = {},
 
+  --- Capture templates (`:Denote capture`, the analogue of `denote-org-capture`).
+  --- `templates`: list of { key, description?, template?, title?, keywords?, file_type?,
+  --- subdirectory?, signature?, prompts?, target? ("journal" | { identifier } | { path }) }.
+  --- `specifiers`: body used when a capture template has no `template` (`denote-org-capture-specifiers`).
+  capture = {
+    templates = {},
+    specifiers = "%l\n%i\n%?",
+  },
+
   --- Save newly created notes to disk immediately.
   save_buffer_after_creation = false,
 
