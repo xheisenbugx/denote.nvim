@@ -214,6 +214,9 @@ local function subcommands()
       require("denote.search").reset()
       require("denote.utils").notify("Denote index cleared")
     end,
+    capture = function(args)
+      d.capture({ key = args[1] })
+    end,
     dblock_update = function()
       local n = d.org_dblock_update()
       require("denote.utils").notify(string.format("Updated %d dynamic block(s)", n))
@@ -259,6 +262,21 @@ function M.register()
   end, {
     range = true,
     desc = "Create a Denote note from the selected region",
+  })
+
+  vim.api.nvim_create_user_command("DenoteCapture", function(cmd_opts)
+    require("denote").capture({
+      key = cmd_opts.args ~= "" and cmd_opts.args or nil,
+      line1 = cmd_opts.range > 0 and cmd_opts.line1 or nil,
+      line2 = cmd_opts.range > 0 and cmd_opts.line2 or nil,
+    })
+  end, {
+    range = true,
+    nargs = "?",
+    complete = function()
+      return require("denote.capture").keys()
+    end,
+    desc = "Capture a Denote note from a capture template (range: selection becomes %i)",
   })
 
   vim.api.nvim_create_user_command("DenoteGrepRegion", function(cmd_opts)

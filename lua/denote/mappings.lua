@@ -37,6 +37,7 @@ function M.setup_global()
     { p .. "u", denote.unlinked_mentions, "Unlinked mentions" },
     { p .. "U", denote.link_mention, "Link mention on this line" },
     { p .. "c", denote.check, "Check broken links & orphans" },
+    { p .. "x", denote.capture, "Capture (template)" },
     { p .. "qc", denote.query_contents_link, "Insert query-contents link" },
     { p .. "qf", denote.query_filenames_link, "Insert query-filenames link" },
     { p .. "e", denote.explorer, "Open Denote explorer" },
@@ -64,6 +65,7 @@ function M.setup_global()
 
   -- Visual mode: create note from region
   vim.keymap.set("x", p .. "n", ":<C-u>DenoteRegion<CR>", { desc = "Denote: New note from region", silent = true })
+  vim.keymap.set("x", p .. "x", ":DenoteCapture<CR>", { desc = "Denote: Capture selection", silent = true })
 
   -- Optional which-key group labels
   if config.opts.integrations and config.opts.integrations.which_key ~= false then

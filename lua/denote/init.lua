@@ -57,6 +57,9 @@ end
 M.region = function(...)
   return require("denote.create").region(...)
 end
+M.capture = function(...)
+  return require("denote.capture").capture(...)
+end
 
 -- Renaming & Front Matter
 M.rename_file = function(...)
