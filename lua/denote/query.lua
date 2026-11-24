@@ -27,15 +27,14 @@ local M = {}
 ---@field text string
 
 --- Search contents of Denote text files in `dir` (or explicit `opts.files`) matching `query`.
---- Uses `rg` when available with a pure-Lua fallback so it works with zero external binaries.
+--- Uses `rg` when available with a pure-Lua fallback so it works with zero external binaries
+--- (see `denote.search`). Pass `on_done` to search asynchronously.
 ---@param query string
----@param opts? { dir?: string, files?: string[], file_regexp?: string, case_sensitive?: boolean }
----@return denote.GrepMatch[]
-function M.search_contents(query, opts)
+---@param opts? { dir?: string, files?: string[], file_regexp?: string, case_sensitive?: boolean, fixed?: boolean }
+---@param on_done? fun(matches: denote.GrepMatch[])
+---@return denote.GrepMatch[]|denote.SearchHandle
+function M.search_contents(query, opts, on_done)
   opts = opts or {}
-  if not query or query == "" then
-    return {}
-  end
   local root = config.directory(opts.dir)
   local candidates = opts.files
     or files.list({
@@ -44,85 +43,13 @@ function M.search_contents(query, opts)
       text_only = true,
       regexp = opts.file_regexp,
     })
-  if #candidates == 0 then
-    return {}
-  end
-
-  local matches = {}
-
-  -- Fast path with ripgrep when available and searching all notes in root
-  if not opts.file_regexp and not opts.files and vim.fn.executable("rg") == 1 then
-    local cmd = {
-      "rg",
-      "--vimgrep",
-      "--no-heading",
-      "--color=never",
-      opts.case_sensitive and "--case-sensitive" or "--smart-case",
-      "--",
-      query,
-      root,
-    }
-    local res = vim.system(cmd, { text = true }):wait()
-    if res.code == 0 and res.stdout then
-      local allowed = {}
-      for _, p in ipairs(candidates) do
-        allowed[utils.normalize(p)] = true
-      end
-      local seen_line = {}
-      for line in res.stdout:gmatch("[^\r\n]+") do
-        local fpath, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
-        if fpath then
-          local norm = utils.normalize(fpath)
-          local key = norm .. ":" .. lnum
-          if allowed[norm] and not seen_line[key] then
-            seen_line[key] = true
-            matches[#matches + 1] = {
-              file = norm,
-              lnum = tonumber(lnum) or 1,
-              col = tonumber(col) or 1,
-              text = vim.trim(text),
-            }
-          end
-        end
-      end
-      return matches
-    end
-  end
-
-  -- Pure-Lua fallback (zero external dependencies)
-  for _, path in ipairs(candidates) do
-    local lines = utils.read_lines(path)
-    for lnum, line in ipairs(lines) do
-      local matched = false
-      local col = 1
-      if opts.case_sensitive then
-        local s = line:find(query, 1, true)
-        if s then
-          matched, col = true, s
-        end
-      else
-        local ok_m, idx = pcall(vim.fn.match, line, query)
-        if ok_m and idx >= 0 then
-          matched, col = true, idx + 1
-        else
-          local s = line:lower():find(query:lower(), 1, true)
-          if s then
-            matched, col = true, s
-          end
-        end
-      end
-      if matched then
-        matches[#matches + 1] = {
-          file = path,
-          lnum = lnum,
-          col = col,
-          text = vim.trim(line),
-        }
-      end
-    end
-  end
-
-  return matches
+  return require("denote.search").run({
+    pattern = query or "",
+    files = candidates,
+    root = not opts.files and root or nil,
+    fixed = opts.fixed,
+    case = opts.case_sensitive and "sensitive" or "smart",
+  }, on_done)
 end
 
 local ns = vim.api.nvim_create_namespace("denote_query")
@@ -146,7 +73,9 @@ function M.grep(query, opts)
     end
     local current_query = vim.trim(q)
     local scoped_files = opts.files
-    local all_matches = M.search_contents(current_query, opts)
+    local all_matches = {}
+    local loading = true
+    local handle = nil
     local include_filters = {}
     local exclude_filters = {}
     local include_keywords = {}
@@ -218,6 +147,16 @@ function M.grep(query, opts)
 
     local function render()
       if not vim.api.nvim_buf_is_valid(buf) then
+        return
+      end
+      vim.b[buf].denote_loading = loading
+      if loading then
+        vim.bo[buf].modifiable = true
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+          string.format("Denote Query: %q  (searching…)", current_query),
+          string.rep("─", 60),
+        })
+        vim.bo[buf].modifiable = false
         return
       end
       local shown = filtered_matches()
@@ -298,12 +237,42 @@ function M.grep(query, opts)
       end
     end
 
+    --- (Re)run the search asynchronously and re-render when results arrive.
+    ---@param search_opts table
+    local function refresh(search_opts)
+      if handle then
+        handle.cancel()
+      end
+      loading = true
+      render()
+      handle = M.search_contents(current_query, search_opts, function(matches)
+        handle = nil
+        if not vim.api.nvim_buf_is_valid(buf) then
+          return
+        end
+        all_matches = matches
+        loading = false
+        render()
+        for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+          if vim.api.nvim_win_get_cursor(win)[1] < 3 and vim.api.nvim_buf_line_count(buf) >= 3 then
+            pcall(vim.api.nvim_win_set_cursor, win, { 3, 0 })
+          end
+        end
+      end)
+    end
+
     vim.cmd(config.opts.window_cmd or "botright 15split")
     vim.api.nvim_win_set_buf(0, buf)
-    render()
-    if vim.api.nvim_buf_line_count(buf) >= 3 then
-      vim.api.nvim_win_set_cursor(0, { 3, 0 })
-    end
+    vim.api.nvim_create_autocmd("BufWipeout", {
+      buffer = buf,
+      once = true,
+      callback = function()
+        if handle then
+          handle.cancel()
+        end
+      end,
+    })
+    refresh(opts)
 
     local function jump(how)
       local row = vim.api.nvim_win_get_cursor(0)[1]
@@ -377,9 +346,8 @@ function M.grep(query, opts)
         if nq and vim.trim(nq) ~= "" then
           current_query = vim.trim(nq)
           scoped_files = matched_files
-          all_matches = M.search_contents(current_query, { dir = opts.dir, files = scoped_files })
           include_filters, exclude_filters, include_keywords, exclude_keywords = {}, {}, {}, {}
-          render()
+          refresh({ dir = opts.dir, files = scoped_files })
         end
       end)
     end, "focus search in matched files")
@@ -407,16 +375,14 @@ function M.grep(query, opts)
       include_keywords = {}
       exclude_keywords = {}
       scoped_files = opts.files
-      all_matches = M.search_contents(current_query, opts)
-      render()
+      refresh(opts)
     end, "clear all filters")
     map("r", function()
-      all_matches = M.search_contents(current_query, {
+      refresh({
         dir = opts.dir,
         files = scoped_files,
         file_regexp = opts.file_regexp,
       })
-      render()
     end, "refresh results")
     map("q", "<Cmd>bwipeout<CR>", "close query results")
     map("g?", function()

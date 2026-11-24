@@ -24,7 +24,7 @@ describe("denote.query", function()
       eq(1, #matches)
       ok(matches[1].text:find("Entanglement", 1, true) ~= nil)
 
-      local buf = denote.grep("Entanglement")
+      local buf = wait_loaded(denote.grep("Entanglement"))
       ok(vim.api.nvim_buf_is_valid(buf))
       local text = table.concat(buf_lines(buf), "\n")
       ok(text:find("Quantum Note", 1, true) ~= nil)

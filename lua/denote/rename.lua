@@ -104,6 +104,7 @@ local function rename_on_disk_and_buffer(old_path, new_path)
     if not ok_mv then
       return false, "Failed to rename file: " .. tostring(err), false
     end
+    utils.notify_fs_change()
   end
 
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
@@ -840,8 +841,8 @@ function M.format_buffer_name(bufnr, fmt)
       elseif c == "k" then
         return table.concat(parsed.keywords or {}, ",")
       elseif c == "b" then
-        local bl = require("denote.backlinks").find(parsed.identifier, { exclude_file = path })
-        return #bl > 0 and (config.opts.rename_buffer_backlinks_indicator or " <-->") or ""
+        local has = require("denote.backlinks").has_backlinks(parsed.identifier, path)
+        return has and (config.opts.rename_buffer_backlinks_indicator or " <-->") or ""
       end
       return ""
     end)

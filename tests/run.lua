@@ -71,6 +71,17 @@ _G.buf_lines = function(buf)
   return vim.api.nvim_buf_get_lines(buf or 0, 0, -1, false)
 end
 
+--- Wait until an async Denote results buffer (grep / backlinks) has finished searching.
+_G.wait_loaded = function(buf, timeout)
+  local done = vim.wait(timeout or 5000, function()
+    return vim.api.nvim_buf_is_valid(buf) and vim.b[buf].denote_loading == false
+  end, 10)
+  if not done then
+    error("timed out waiting for async results in buffer " .. tostring(buf), 2)
+  end
+  return buf
+end
+
 _G.with_temp_dir = function(fn)
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")

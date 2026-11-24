@@ -12,6 +12,8 @@ CONTENTS                                                     *denote-contents*
   7. Org Mode (org.nvim) & Markdown ........................ |denote-syntax|
   8. Configuration Reference ............................... |denote-config|
   9. Lua API ............................................... |denote-api|
+ 10. Search, Index & Performance ........................... |denote-search|
+ 11. Diagnostics, Preview & Reports ........................ |denote-reports|
 
 ==============================================================================
 1. INTRODUCTION                                                 *denote-intro*
@@ -108,6 +110,7 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `backlinks`                 Open the interactive backlinks split buffer
     `find_backlink`             Jump to a backlinking file via fuzzy picker
     `find_backlink_with_location` Jump directly to a backlink line via picker
+    `preview`                   Preview the note behind the link under cursor
     `convert_to_file_links`     Convert `denote:` links to relative file links
     `convert_to_denote_links`   Convert relative file links to `denote:` links
 
@@ -118,6 +121,12 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `query_filenames_link [q]`  Insert a live `denote:query-filenames:` link
     `explorer [regexp]`         Open the interactive Denote explorer buffer
     `sort_dired`                Prompt for regexp & sort key, open explorer
+
+  Reports & Maintenance:
+    `unlinked_mentions`         Quickfix list of unlinked mentions of this note
+    `link_mention`              Turn the mention on the current line into a link
+    `check`                     Quickfix list of broken links and orphan notes
+    `reindex`                   Drop cached file index, titles, and `rg` check
 
   Renaming & Front Matter:
     `rename`                    Interactively rename any file + front matter
@@ -178,6 +187,9 @@ All global keymaps live under `mappings.prefix` (default `<leader>n`):
   `<leader>nb`   Open backlinks buffer
   `<leader>nB`   Find backlink (picker)
   `<leader>ng`   Grep notes
+  `<leader>nu`   Unlinked mentions of the current note (quickfix)
+  `<leader>nU`   Link the unlinked mention on the current line
+  `<leader>nc`   Check for broken links & orphan notes (quickfix)
   `<leader>nqc`  Insert query-contents link
   `<leader>nqf`  Insert query-filenames link
   `<leader>ne`   Open Denote explorer
@@ -192,6 +204,8 @@ All global keymaps live under `mappings.prefix` (default `<leader>n`):
 
 Inside Org, Markdown, and plain text buffers, `<CR>` follows any `denote:`
 link under the cursor and falls back to normal `<CR>` everywhere else.
+`K` (`mappings.preview_link`) previews the linked note in a float and falls
+back to LSP hover or the native `K` when the cursor is not on a link.
 Press `g?` inside Explorer, Backlinks, or Query buffers for a keymap float.
 
 ==============================================================================
@@ -228,9 +242,13 @@ See `lua/denote/config.lua` for all defaults:
   - `silos` (string[])                       Additional isolated note directories
   - `journal` (table)                        Journal directory, keyword, format
   - `sequence` (table)                       `{ scheme = "numeric" | "alphanumeric" }`
-  - `ui` (table)                             Link highlighting, concealment, broken link checks
+  - `ui` (table)                             Link highlighting, concealment, broken link checks,
+                                             `diagnostics`, `diagnostics_severity`, `debounce_ms`
+  - `search` (table)                         `{ ripgrep = true, backlinks_indicator_ttl = 10000 }`
+  - `preview` (table)                        `{ max_lines = 20, border = "rounded" }`
   - `integrations` (table)                   `{ org = true, which_key = true }`
-  - `mappings` (table)                       `{ enabled = true, prefix = "<leader>n", follow_link = "<CR>" }`
+  - `mappings` (table)                       `{ enabled = true, prefix = "<leader>n", follow_link = "<CR>",`
+                                             `preview_link = "K" }`
 
 ==============================================================================
 9. LUA API                                                        *denote-api*
@@ -241,5 +259,68 @@ See `lua/denote/config.lua` for all defaults:
   denote.rename_sync({ file = path, title = "Renamed", keywords = { "done" } })
   denote.follow_target("20261123T191500::#intro")
   denote.statusline() -- formatted note title for lualine / winbar
+  denote.check({ quickfix = false }) -- { broken = {...}, orphans = {...} }
+  denote.unlinked_mentions({ sync = true })
 <
+Long-running searches accept an optional callback and then run asynchronously,
+returning a handle with `:cancel()`: >lua
+  require("denote.backlinks").find(id, {}, function(matches) end)
+  require("denote.query").search_contents("regex", {}, function(matches) end)
+<
+
+==============================================================================
+10. SEARCH, INDEX & PERFORMANCE                                *denote-search*
+
+File index ~
+Directory listings are cached per root. Each lookup re-checks only the mtime
+of every scanned directory (adding, removing, or renaming a file changes its
+parent's mtime), so external changes from git, sync tools, or Emacs are picked
+up without rescanning every file. `:Denote reindex` drops all caches.
+
+Identifier lookups (following links, broken-link checks) search the active
+directory, every configured silo, and `journal.directory`.
+
+Full-text search ~
+Grep, query links, backlinks, unlinked mentions, and `:Denote check` share one
+engine (`lua/denote/search.lua`):
+  - `rg` is used when installed and `search.ripgrep` is true. It always runs
+    with `--no-ignore --hidden`, so `.gitignore`d and dot-directories never
+    hide notes, and results are filtered through the Denote file index.
+  - Without `rg`, a pure-Lua scanner uses Vim "very magic" regexps (`\v`).
+    Both dialects treat `| ( ) + ? {n}` as operators.
+  - Case is "smart": insensitive unless the pattern has an uppercase letter.
+  - Unsaved buffer contents are searched instead of the file on disk.
+  - The Backlinks and Query buffers search asynchronously and show
+    "(searching…)" until results arrive.
+
+The statusline `%b` indicator is cached per note and refreshed in the
+background (`search.backlinks_indicator_ttl`), so it never blocks redraws.
+
+Run `make bench N=10000` to time common operations on a generated vault.
+
+==============================================================================
+11. DIAGNOSTICS, PREVIEW & REPORTS                            *denote-reports*
+
+Broken links ~
+`denote:` links whose identifier cannot be resolved are highlighted with
+`DenoteBrokenLink` and reported through |vim.diagnostic| (source `denote`,
+code `broken-link`), so they appear in `]d`, |vim.diagnostic.setqflist()|,
+and Trouble. Disable with `ui.diagnostics = false`. Checks are debounced
+(`ui.debounce_ms`) after leaving insert mode, saving, or regaining focus.
+
+Preview ~
+`:Denote preview` (or `K` on a link) shows the target's title, identifier,
+keywords, and first `preview.max_lines` body lines. Heading links start the
+preview at that heading. Press `K` again to enter the float, `<CR>` inside it
+to open the note, `q` / `<Esc>` to close.
+
+Unlinked mentions ~
+`:Denote unlinked_mentions` fills the quickfix list with lines in other notes
+that mention the current note's title (case-insensitively) without linking
+to it. Jump to an entry and run `:Denote link_mention` to wrap the mention in
+a `denote:` link, keeping its original text as the description.
+
+Vault check ~
+`:Denote check` lists broken links (`W`) and orphan notes (`I`, notes no other
+note links to) in the quickfix list.
 vim:tw=78:ts=8:ft=help:norl:

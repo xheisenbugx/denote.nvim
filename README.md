@@ -148,8 +148,10 @@ Browse sequence relatives (`<leader>nzr` — parent, siblings, children), spawn 
 | 📄 | **Front matter & templates** | Built-in `org`, `markdown-yaml` (inline & block YAML lists), `markdown-toml`, and `text` formats, custom file types, named body templates (static strings or Lua functions), and `:DenoteRegion` with automatic code block wrapping |
 | 🔄 | **Two-way renaming** | Rename any file (`:Denote rename`, `rename_title`, `rename_keywords`, `rename_signature`, `rename_date`) with in-place front matter updates that preserve custom fields; sync filenames from front matter (`:Denote rename_from_front_matter`); quick `keywords_add` / `keywords_remove`; optional `auto_rename_on_save` |
 | 🔗 | **Links & heading links** | Immutable `denote:ID` links in Org, Markdown (`denote`, `wiki`, or `relative` styles), and plain text; `link_or_create`, `link_after_creating`, `add_links` (bulk list matching regexp), `find_link`, direct Org (`::*Heading`, `::#custom-id`) & Markdown (`::#heading-slug`) heading links, plus lossless conversion between `denote:` and relative file links |
-| 🔙 | **Backlinks** | Interactive split buffer (`:Denote backlinks`) grouped by file with line numbers and matching context, toggleable context/filenames-only (`f`), plus fuzzy jump-to-line picker (`:Denote find_backlink`) |
-| 🔍 | **Grep & Query links (Denote 4.0)** | Fast full-text search (`:Denote grep`, accelerated by `rg` with pure-Lua fallback) in an interactive narrowing buffer (`f` keep, `x` exclude, `c` clear); live `denote:query-contents:` and `denote:query-filenames:` links |
+| 🔙 | **Backlinks** | Interactive, asynchronous split buffer (`:Denote backlinks`) grouped by file with line numbers and matching context, toggleable context/filenames-only (`f`), plus fuzzy jump-to-line picker (`:Denote find_backlink`); accelerated by `rg` when installed |
+| 🔍 | **Grep & Query links (Denote 4.0)** | Fast, non-blocking full-text search (`:Denote grep`, accelerated by `rg` with pure-Lua fallback and identical smart-case semantics) in an interactive narrowing buffer (`f` keep, `x` exclude, `c` clear); live `denote:query-contents:` and `denote:query-filenames:` links |
+| 🩺 | **Diagnostics, preview & reports** | Broken links reported via `vim.diagnostic` (`]d`, quickfix, Trouble); `K` hover preview of the linked note; `:Denote unlinked_mentions` + `:Denote link_mention`; `:Denote check` for broken links & orphan notes |
+| ⚡ | **Cached file index** | Directory listings and identifier lookups are cached and revalidated with one `stat` per directory, so large vaults stay snappy (`make bench`) |
 | 🗂️ | **Interactive Explorer** | Dired / `denote-menu` / `denote-sort-dired` buffer with colorized filename components, regexp & keyword filters, sorting by identifier / title / keywords / signature / mtime, reverse order, file marking, single & batch renaming, and deletion |
 | 📓 | **Daily Journal** | Drop-in `denote-journal` support: `:Denote journal [date]` (open existing or create), `journal_new`, and `journal_link`, supporting flexible dates (`yesterday`, `tomorrow`, `-2d`, `2026-11-23`) |
 | 🌳 | **Sequences (Folgezettel)** | Drop-in `denote-sequence` support for both **numeric** (`1`, `1=1`, `1=2`, `1=1=1`) and **alphanumeric** (`1`, `1a`, `1b`, `1a1`) schemes: `new_parent`, `new_child`, `new_sibling`, `find_relatives`, `link`, `reparent`, and sequence-aware natural sorting |
@@ -218,6 +220,10 @@ Every action is available via `:Denote <subcommand>` (with tab completion) and d
 | `<leader>nb` | `:Denote backlinks` | `denote-backlinks` | Open interactive backlinks buffer |
 | `<leader>nB` | `:Denote find_backlink` | `denote-find-backlink` | Fuzzy-jump directly to a backlink line |
 | `<leader>ng` | `:Denote grep` | `denote-grep` | Full-text search across notes with live narrowing |
+| `<leader>nu` | `:Denote unlinked_mentions` | — | Quickfix list of mentions of this note's title that are not links |
+| `<leader>nU` | `:Denote link_mention` | — | Turn the mention on the current line into a `denote:` link |
+| `<leader>nc` | `:Denote check` | — | Quickfix list of broken links and orphan notes |
+| `K` (on a link) | `:Denote preview` | — | Float with the linked note's title, keywords, and first lines |
 | `<leader>nqc` | `:Denote query_contents_link` | `denote-query-contents-link` | Insert a live content-search query link |
 | `<leader>nqf` | `:Denote query_filenames_link` | `denote-query-filenames-link` | Insert a live filename-search query link |
 | `<leader>ne` | `:Denote explorer` | `denote-sort-dired` / `denote-menu` | Open the interactive Denote Explorer buffer |
@@ -311,6 +317,21 @@ require("denote").setup({
     highlight_links = true,
     conceal_links = false,
     check_broken_links = true,
+    diagnostics = true, -- report broken links via vim.diagnostic
+    diagnostics_severity = vim.diagnostic.severity.WARN,
+    debounce_ms = 150,
+  },
+
+  -- Full-text search (grep, backlinks, query links, unlinked mentions)
+  search = {
+    ripgrep = true, -- use `rg` when installed (pure-Lua fallback otherwise)
+    backlinks_indicator_ttl = 10000, -- cache for the statusline `%b` indicator (ms)
+  },
+
+  -- `K` hover preview of linked notes
+  preview = {
+    max_lines = 20,
+    border = "rounded",
   },
 
   -- Integrations
@@ -325,6 +346,7 @@ require("denote").setup({
     prefix = "<leader>n",
     follow_link = "<CR>",
     follow_link_fallback = true,
+    preview_link = "K", -- falls back to LSP hover / native K off links
   },
 })
 ```
@@ -380,6 +402,7 @@ Contributions, bug reports, and ideas are welcome — especially where behavior 
 git clone https://github.com/xheisenbugx/denote.nvim && cd denote.nvim
 make test                                  # run all specs headlessly
 make test SPEC=tests/spec/naming_spec.lua  # run a single spec
+make bench N=10000                         # time common operations on a generated vault
 make lint                                  # stylua --check
 make format                                # format Lua files with stylua
 ```

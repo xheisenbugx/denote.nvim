@@ -147,6 +147,11 @@ describe("denote 4.3.1 parity & visual bug regressions", function()
         body = "Link to [Hub](denote:" .. target.identifier .. ")\n",
         open = false,
       })
+      -- The backlinks indicator refreshes asynchronously (statusline must never block).
+      denote.statusline(target.bufnr)
+      vim.wait(3000, function()
+        return denote.statusline(target.bufnr) == "[D] Hub Note <-->"
+      end, 10)
       eq("[D] Hub Note <-->", denote.statusline(target.bufnr))
     end)
   end)
@@ -184,6 +189,7 @@ describe("denote 4.3.1 parity & visual bug regressions", function()
       local lc = vim.api.nvim_buf_line_count(0)
       local qbuf = denote.grep_files_referenced_in_region("safety", { line1 = 1, line2 = lc, bufnr = moc.bufnr })
       ok(qbuf ~= nil and vim.api.nvim_buf_is_valid(qbuf))
+      wait_loaded(qbuf)
       local qtext = table.concat(buf_lines(qbuf), "\n")
       ok(qtext:find("Rust Note", 1, true) ~= nil)
       eq(nil, qtext:find("Lua Note", 1, true))

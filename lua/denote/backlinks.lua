@@ -22,53 +22,103 @@ local M = {}
 ---@field col integer 1-based column of reference
 ---@field text string Trimmed line text
 
---- Collect all backlinks referencing `identifier` across `dir` (excluding `exclude_file`).
+--- Build the search spec for backlinks to `identifier`.
 ---@param identifier string
----@param opts? { dir?: string, exclude_file?: string, not_regexp?: string, excluded_dirs_regexp?: string }
----@return denote.BacklinkMatch[]
-function M.find(identifier, opts)
-  opts = opts or {}
-  if not identifier or identifier == "" then
-    return {}
-  end
+---@param opts table
+---@return denote.SearchSpec
+local function backlink_spec(identifier, opts)
   local root = config.directory(opts.dir)
   local exclude = opts.exclude_file and utils.normalize(opts.exclude_file) or nil
-  local candidates = files.list({
-    dir = root,
-    denote_only = true,
-    text_only = true,
-    not_regexp = opts.not_regexp,
-    excluded_dirs_regexp = opts.excluded_dirs_regexp,
-  })
-
-  local matches = {}
-  local id_escaped = utils.escape_lua_pattern(identifier)
-  -- Match either `denote:ID` or a direct reference to ID in the body (skipping front matter identifier line)
-  for _, path in ipairs(candidates) do
-    if utils.normalize(path) ~= exclude then
-      local bufnr = utils.find_buffer(path)
-      local lines = (bufnr and vim.api.nvim_buf_is_loaded(bufnr)) and vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-        or utils.read_lines(path)
-      local ft = frontmatter.detect_file_type(path, lines)
-      local fm = ft and frontmatter.parse_lines(lines, ft) or nil
-      local fm_end = (fm and fm.has_front_matter) and fm.end_line or 0
-
-      for lnum = fm_end + 1, #lines do
-        local line = lines[lnum]
-        local col = line:find(id_escaped)
-        if col then
-          matches[#matches + 1] = {
-            file = path,
-            lnum = lnum,
-            col = col,
-            text = vim.trim(line),
-          }
-        end
-      end
+  local exclude_real = exclude and config.canonicalize(exclude) or nil
+  local candidates = {}
+  for _, path in
+    ipairs(files.list({
+      dir = root,
+      denote_only = true,
+      text_only = true,
+      not_regexp = opts.not_regexp,
+      excluded_dirs_regexp = opts.excluded_dirs_regexp,
+    }))
+  do
+    if path ~= exclude and path ~= exclude_real then
+      candidates[#candidates + 1] = path
     end
   end
+  return { pattern = identifier, fixed = true, case = "sensitive", files = candidates, root = root }
+end
 
-  return matches
+--- Drop matches that are inside a file's own front matter (e.g. its `identifier:` line).
+---@param matches denote.SearchMatch[]
+---@return denote.BacklinkMatch[]
+local function drop_front_matter(matches)
+  local fm_end = {}
+  local out = {}
+  for _, m in ipairs(matches) do
+    if fm_end[m.file] == nil then
+      local fm = frontmatter.parse_file(m.file)
+      fm_end[m.file] = (fm and fm.has_front_matter) and fm.end_line or 0
+    end
+    if m.lnum > fm_end[m.file] then
+      out[#out + 1] = m
+    end
+  end
+  return out
+end
+
+--- Collect all backlinks referencing `identifier` across `dir` (excluding `exclude_file`).
+--- Uses `rg` when available (see `denote.search`); pass `on_done` to run asynchronously.
+---@param identifier string
+---@param opts? { dir?: string, exclude_file?: string, not_regexp?: string, excluded_dirs_regexp?: string }
+---@param on_done? fun(matches: denote.BacklinkMatch[])
+---@return denote.BacklinkMatch[]|denote.SearchHandle
+function M.find(identifier, opts, on_done)
+  opts = opts or {}
+  local search = require("denote.search")
+  if not identifier or identifier == "" then
+    return search.run({ pattern = "", files = {} }, on_done)
+  end
+  local spec = backlink_spec(identifier, opts)
+  if on_done then
+    return search.run(spec, function(matches)
+      on_done(drop_front_matter(matches))
+    end)
+  end
+  return drop_front_matter(search.run(spec) --[[@as denote.SearchMatch[] ]])
+end
+
+---@type table<string, { value: boolean, pending?: boolean, time?: integer, generation?: integer }>
+local has_cache = {}
+
+--- Return true if any note links to `identifier`. The answer is cached per identifier and
+--- refreshed asynchronously, so this is cheap enough to call from a statusline.
+---@param identifier string
+---@param path? string The note itself (excluded from the search)
+---@return boolean
+function M.has_backlinks(identifier, path)
+  if not identifier or identifier == "" then
+    return false
+  end
+  local entry = has_cache[identifier]
+  local now = (vim.uv or vim.loop).now()
+  local ttl = (config.opts.search and config.opts.search.backlinks_indicator_ttl) or 10000
+  if not entry or (not entry.pending and (now - entry.time > ttl or entry.generation ~= files.generation)) then
+    entry = entry or { value = false }
+    entry.pending = true
+    has_cache[identifier] = entry
+    -- Record the generation the search started at: changes made while it runs trigger a re-check.
+    local started_generation = files.generation
+    M.find(identifier, { exclude_file = path }, function(matches)
+      local changed = entry.value ~= (#matches > 0)
+      entry.value = #matches > 0
+      entry.pending = false
+      entry.time = (vim.uv or vim.loop).now()
+      entry.generation = started_generation
+      if changed then
+        pcall(vim.cmd.redrawstatus)
+      end
+    end)
+  end
+  return entry.value
 end
 
 --- Return deduplicated list of files that link to `identifier`.
@@ -194,12 +244,24 @@ function M.open(opts)
   pcall(vim.api.nvim_buf_set_name, buf, "denote://backlinks/" .. id)
 
   local line_targets = {}
+  local matches = {}
+  local loading = true
+  local handle = nil
 
   local function render()
     if not vim.api.nvim_buf_is_valid(buf) then
       return
     end
-    local matches = M.find(id, { dir = opts.dir, exclude_file = target_file })
+    vim.b[buf].denote_loading = loading
+    if loading then
+      vim.bo[buf].modifiable = true
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+        string.format('Backlinks for "%s" (%s)  (searching…)', title, id),
+        string.rep("─", 60),
+      })
+      vim.bo[buf].modifiable = false
+      return
+    end
     line_targets = {}
     local lines = {}
     local hls = {}
@@ -248,8 +310,14 @@ function M.open(opts)
         end
       end
     else
-      local unique_files = M.files_for(id, { dir = opts.dir, exclude_file = target_file })
-      for _, f in ipairs(unique_files) do
+      local seen, unique_files = {}, {}
+      for _, m in ipairs(matches) do
+        if not seen[m.file] then
+          seen[m.file] = true
+          unique_files[#unique_files + 1] = m.file
+        end
+      end
+      for _, f in ipairs(sort.sort_files(unique_files, "identifier")) do
         local parsed = naming.parse_filename(f)
         local f_title = frontmatter.extract_title(f)
         local kws = #parsed.keywords > 0 and ("  [" .. table.concat(parsed.keywords, ", ") .. "]") or ""
@@ -275,12 +343,40 @@ function M.open(opts)
     end
   end
 
+  local function refresh()
+    if handle then
+      handle.cancel()
+    end
+    loading = true
+    render()
+    handle = M.find(id, { dir = opts.dir, exclude_file = target_file }, function(found)
+      handle = nil
+      if not vim.api.nvim_buf_is_valid(buf) then
+        return
+      end
+      matches = found
+      loading = false
+      render()
+      for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        if vim.api.nvim_win_get_cursor(win)[1] < 3 and vim.api.nvim_buf_line_count(buf) >= 3 then
+          pcall(vim.api.nvim_win_set_cursor, win, { 3, 0 })
+        end
+      end
+    end)
+  end
+
   vim.cmd(config.opts.window_cmd or "botright 15split")
   vim.api.nvim_win_set_buf(0, buf)
-  render()
-  if vim.api.nvim_buf_line_count(buf) >= 3 then
-    vim.api.nvim_win_set_cursor(0, { 3, 0 })
-  end
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    buffer = buf,
+    once = true,
+    callback = function()
+      if handle then
+        handle.cancel()
+      end
+    end,
+  })
+  refresh()
 
   local function jump(how)
     local row = vim.api.nvim_win_get_cursor(0)[1]
@@ -312,8 +408,8 @@ function M.open(opts)
     show_context = not show_context
     render()
   end, "toggle context / filenames-only")
-  map("r", render, "refresh backlinks")
-  map("g", render, "refresh backlinks")
+  map("r", refresh, "refresh backlinks")
+  map("g", refresh, "refresh backlinks")
   map("q", "<Cmd>bwipeout<CR>", "close backlinks")
   map("g?", function()
     require("denote.ui").show_help("Denote Backlinks", {

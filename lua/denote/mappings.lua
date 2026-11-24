@@ -34,6 +34,9 @@ function M.setup_global()
     { p .. "b", denote.backlinks, "Open backlinks buffer" },
     { p .. "B", denote.find_backlink, "Find backlink (picker)" },
     { p .. "g", denote.grep, "Grep notes" },
+    { p .. "u", denote.unlinked_mentions, "Unlinked mentions" },
+    { p .. "U", denote.link_mention, "Link mention on this line" },
+    { p .. "c", denote.check, "Check broken links & orphans" },
     { p .. "qc", denote.query_contents_link, "Insert query-contents link" },
     { p .. "qf", denote.query_filenames_link, "Insert query-filenames link" },
     { p .. "e", denote.explorer, "Open Denote explorer" },
@@ -75,16 +78,53 @@ function M.setup_global()
   end
 end
 
+--- Attach the buffer-local link preview keymap (default `K`). When the cursor is not on a
+--- Denote link it falls back to LSP hover (if a client supports it) or the native key.
+---@param bufnr integer
+function M.attach_preview(bufnr)
+  local m = config.opts.mappings
+  if not m or not m.preview_link then
+    return
+  end
+  local lhs = m.preview_link
+  vim.keymap.set("n", lhs, function()
+    if links.link_at_cursor(bufnr) then
+      require("denote.preview").open()
+      return
+    end
+    local get_clients = vim.lsp.get_clients or vim.lsp.get_active_clients
+    for _, client in ipairs(get_clients({ bufnr = bufnr })) do
+      local supports
+      if vim.fn.has("nvim-0.11") == 1 then
+        supports = client:supports_method("textDocument/hover")
+      else
+        supports = client.supports_method("textDocument/hover")
+      end
+      if supports then
+        vim.lsp.buf.hover()
+        return
+      end
+    end
+    local key = vim.api.nvim_replace_termcodes(lhs, true, false, true)
+    local count = vim.v.count > 0 and tostring(vim.v.count) or ""
+    vim.api.nvim_feedkeys(count .. key, "n", false)
+  end, { buffer = bufnr, desc = "Denote: Preview linked note" })
+end
+
 --- Attach buffer-local link-following keymap to a Markdown / Org / Text buffer.
 --- Carefully falls back to the native key behavior when cursor is NOT on a Denote link.
 ---@param bufnr integer
 function M.attach_buffer(bufnr)
   local m = config.opts.mappings
-  if not m or not m.follow_link then
+  if not m then
     return
   end
   local ft = vim.bo[bufnr].filetype
   if ft ~= "markdown" and ft ~= "md" and ft ~= "text" and ft ~= "org" then
+    return
+  end
+  M.attach_preview(bufnr)
+  if not m.follow_link then
     return
   end
   -- In Org buffers when org.nvim is installed/attached, org.nvim handles <CR> via `links.types.denote`
@@ -104,6 +144,33 @@ function M.attach_buffer(bufnr)
       vim.api.nvim_feedkeys(count .. key, "n", false)
     end
   end, { buffer = bufnr, desc = "Denote: Follow link at cursor" })
+end
+
+local decorate_timers = {}
+
+--- Re-decorate `bufnr` after `ui.debounce_ms`, coalescing bursts of events into one pass.
+---@param bufnr integer
+function M.schedule_decorate(bufnr)
+  local uv = vim.uv or vim.loop
+  local delay = (config.opts.ui and config.opts.ui.debounce_ms) or 150
+  local timer = decorate_timers[bufnr]
+  if not timer then
+    timer = uv.new_timer()
+    decorate_timers[bufnr] = timer
+  end
+  timer:stop()
+  timer:start(
+    delay,
+    0,
+    vim.schedule_wrap(function()
+      timer:stop()
+      timer:close()
+      decorate_timers[bufnr] = nil
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        ui.decorate_buffer(bufnr)
+      end
+    end)
+  )
 end
 
 --- Register autocmds for link highlighting, org.nvim integration, buffer keymaps, and optional auto-rename.
@@ -138,7 +205,7 @@ function M.setup_autocmds()
     end,
   })
 
-  vim.api.nvim_create_autocmd({ "BufWritePost", "InsertLeave" }, {
+  vim.api.nvim_create_autocmd({ "BufWritePost", "InsertLeave", "FocusGained" }, {
     group = augroup,
     callback = function(ev)
       local bufnr = ev.buf
@@ -147,7 +214,7 @@ function M.setup_autocmds()
       end
       local ft = vim.bo[bufnr].filetype
       if ft == "markdown" or ft == "md" or ft == "text" or ft == "org" then
-        ui.decorate_buffer(bufnr)
+        M.schedule_decorate(bufnr)
       end
     end,
   })
@@ -155,6 +222,10 @@ function M.setup_autocmds()
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = augroup,
     callback = function(ev)
+      local path = vim.api.nvim_buf_get_name(ev.buf)
+      if path ~= "" and naming.is_denote_file(path) then
+        require("denote.files").touch()
+      end
       if not config.opts.auto_rename_on_save then
         return
       end
