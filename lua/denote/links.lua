@@ -1,5 +1,5 @@
 ---@mod denote.links Creating, parsing, following, finding, and converting Denote links
----
+---@brief [[
 --- Full syntax support for:
 --- - Org mode:      `[[denote:ID][Description]]`, `[[denote:ID]]`,
 ---                  `[[denote:ID::*Heading][Description]]`, `[[denote:ID::#custom-id][Description]]`,
@@ -8,6 +8,7 @@
 ---                  `[[denote:ID|Description]]`, `[[denote:ID]]`,
 ---                  `[Description](denote:query-contents:QUERY)`, `[Description](denote:query-filenames:QUERY)`
 --- - Plain text:    `[[denote:ID][Description]]`, `denote:ID`
+---@brief ]]
 
 local config = require("denote.config")
 local create = require("denote.create")
@@ -21,13 +22,13 @@ local utils = require("denote.utils")
 local M = {}
 
 ---@class denote.Link
----@field kind "id"|"query-contents"|"query-filenames"
+---@field kind 'id'|'query-contents'|'query-filenames'
 ---@field target string Raw target after `denote:` (e.g. `20261123T191500` or `20261123T191500::*Heading`)
 ---@field identifier? string 15-char Denote identifier (when kind == "id")
 ---@field search? string Optional search suffix after `::` (e.g. `*Heading`, `#custom-id`, `/regex/`)
 ---@field query? string Search query (when kind is query-contents or query-filenames)
 ---@field description? string Link display text
----@field syntax "org"|"markdown"|"wiki"|"plain"
+---@field syntax 'org'|'markdown'|'wiki'|'plain'
 ---@field start_col integer 1-based inclusive column
 ---@field end_col integer 1-based inclusive column
 ---@field lnum? integer 1-based line number
@@ -35,7 +36,7 @@ local M = {}
 
 --- Determine the link syntax to use for a buffer or file path.
 ---@param bufnr? integer
----@return "org"|"markdown"|"text"
+---@return 'org'|'markdown'|'text'
 function M.buffer_syntax(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   local ft = vim.bo[bufnr].filetype
@@ -104,7 +105,7 @@ end
 --- Format a Denote link string for `syntax` ("org", "markdown", "text").
 ---@param target string Target after `denote:` (e.g. "20261123T191500" or "20261123T191500::#sec")
 ---@param description? string
----@param opts? { syntax?: "org"|"markdown"|"text", id_only?: boolean, file_path?: string, from_dir?: string }
+---@param opts? { syntax?: 'org'|'markdown'|'text', id_only?: boolean, file_path?: string, from_dir?: string }
 ---@return string
 function M.format_link(target, description, opts)
   opts = opts or {}
@@ -144,7 +145,7 @@ end
 
 --- Classify a raw `denote:` target string into `{ kind, identifier, search, query }`.
 ---@param target string
----@return { kind: "id"|"query-contents"|"query-filenames", identifier?: string, search?: string, query?: string }
+---@return { kind: 'id'|'query-contents'|'query-filenames', identifier?: string, search?: string, query?: string }
 function M.parse_target(target)
   local qc = target:match("^query%-contents:(.*)$")
   if qc then

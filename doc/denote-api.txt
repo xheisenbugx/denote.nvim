@@ -1,0 +1,2022 @@
+*denote-api.txt*  denote.nvim Lua API reference (generated, do not edit)
+
+Generated from the LuaCATS annotations in lua/denote/ by `make docs`.
+For the user guide, see |denote.txt|.
+
+==============================================================================
+Emacs Denote, rebuilt for Neovim in pure Lua                            *denote*
+
+ File-naming-first note-taking for Neovim with zero dependencies, full
+ Org mode (`org.nvim`), Markdown (YAML & TOML), and plain text support,
+ backlinks, live query links, explorer, silos, daily journal, and
+ Folgezettel sequences.
+
+ `require("denote")` re-exports the commands of the modules below. Besides
+ the functions listed here, `backlinks()`, `preview()`, and `explorer()` are
+ the same as |denote.backlinks.open|, |denote.preview.open|, and
+ |denote.explorer.open|.
+
+M.setup({opts?})                                                  *denote.setup*
+     Initialize denote.nvim with user configuration.
+
+    Parameters: ~
+        {opts?}  (table)
+
+    Returns: ~
+        (denote.Config)
+
+
+M.note()                                                           *denote.note*
+     Same as |denote.create.note|.
+
+
+M.create_sync()                                             *denote.create_sync*
+     Same as |denote.create.create_sync|.
+
+
+M.type()                                                           *denote.type*
+     Same as |denote.create.type|.
+
+
+M.date()                                                           *denote.date*
+     Same as |denote.create.date|.
+
+
+M.subdirectory()                                           *denote.subdirectory*
+     Same as |denote.create.subdirectory|.
+
+
+M.template()                                                   *denote.template*
+     Same as |denote.create.template|.
+
+
+M.signature()                                                 *denote.signature*
+     Same as |denote.create.signature|.
+
+
+M.open_or_create()                                       *denote.open_or_create*
+     Same as |denote.create.open_or_create|.
+
+
+M.open_or_create_with_command()             *denote.open_or_create_with_command*
+     Same as |denote.create.open_or_create_with_command|.
+
+
+M.region()                                                       *denote.region*
+     Same as |denote.create.region|.
+
+
+M.rename_file()                                             *denote.rename_file*
+     Same as |denote.rename.rename_file|.
+
+
+M.rename_sync()                                             *denote.rename_sync*
+     Same as |denote.rename.rename_sync|.
+
+
+M.rename_file_title()                                 *denote.rename_file_title*
+     Same as |denote.rename.rename_file_title|.
+
+
+M.rename_file_keywords()                           *denote.rename_file_keywords*
+     Same as |denote.rename.rename_file_keywords|.
+
+
+M.rename_file_signature()                         *denote.rename_file_signature*
+     Same as |denote.rename.rename_file_signature|.
+
+
+M.rename_file_date()                                   *denote.rename_file_date*
+     Same as |denote.rename.rename_file_date|.
+
+
+M.rename_file_identifier()                       *denote.rename_file_identifier*
+     Same as |denote.rename.rename_file_identifier|.
+
+
+M.rename_file_using_front_matter()       *denote.rename_file_using_front_matter*
+     Same as |denote.rename.rename_file_using_front_matter|.
+
+
+M.change_file_type_and_front_matter() *denote.change_file_type_and_front_matter*
+     Same as |denote.rename.change_file_type_and_front_matter|.
+
+
+M.add_front_matter()                                   *denote.add_front_matter*
+     Same as |denote.rename.add_front_matter|.
+
+
+M.keywords_add()                                           *denote.keywords_add*
+     Same as |denote.rename.keywords_add|.
+
+
+M.keywords_remove()                                     *denote.keywords_remove*
+     Same as |denote.rename.keywords_remove|.
+
+
+M.statusline()                                               *denote.statusline*
+     Same as |denote.rename.format_buffer_name|.
+
+
+M.link()                                                           *denote.link*
+     Same as |denote.links.link|.
+
+
+M.link_or_create()                                       *denote.link_or_create*
+     Same as |denote.links.link_or_create|.
+
+
+M.link_or_create_with_command()             *denote.link_or_create_with_command*
+     Same as |denote.links.link_or_create_with_command|.
+
+
+M.link_after_creating()                             *denote.link_after_creating*
+     Same as |denote.links.link_after_creating|.
+
+
+M.link_to_heading()                                     *denote.link_to_heading*
+     Same as |denote.links.link_to_heading|.
+
+
+M.link_to_file_with_contents()               *denote.link_to_file_with_contents*
+     Same as |denote.links.link_to_file_with_contents|.
+
+
+M.link_to_all_files_with_contents()     *denote.link_to_all_files_with_contents*
+     Same as |denote.links.link_to_all_files_with_contents|.
+
+
+M.add_links()                                                 *denote.add_links*
+     Same as |denote.links.add_links|.
+
+
+M.follow_link()                                             *denote.follow_link*
+     Same as |denote.links.follow_link|.
+
+
+M.follow_target()                                         *denote.follow_target*
+     Same as |denote.links.follow_target|.
+
+
+M.find_link()                                                 *denote.find_link*
+     Same as |denote.links.find_link|.
+
+
+M.convert_links_to_file_paths()             *denote.convert_links_to_file_paths*
+     Same as |denote.links.convert_links_to_file_paths|.
+
+
+M.convert_links_to_denote_paths()         *denote.convert_links_to_denote_paths*
+     Same as |denote.links.convert_links_to_denote_paths|.
+
+
+M.find_backlink()                                         *denote.find_backlink*
+     Same as |denote.backlinks.find_backlink|.
+
+
+M.find_backlink_with_location()             *denote.find_backlink_with_location*
+     Same as |denote.backlinks.find_backlink_with_location|.
+
+
+M.grep()                                                           *denote.grep*
+     Same as |denote.query.grep|.
+
+
+M.grep_files_referenced_in_region()     *denote.grep_files_referenced_in_region*
+     Same as |denote.query.grep_files_referenced_in_region|.
+
+
+M.query_contents_link()                             *denote.query_contents_link*
+     Same as |denote.query.query_contents_link|.
+
+
+M.query_filenames_link()                           *denote.query_filenames_link*
+     Same as |denote.query.query_filenames_link|.
+
+
+M.unlinked_mentions()                                 *denote.unlinked_mentions*
+     Same as |denote.report.unlinked_mentions|.
+
+
+M.link_mention()                                           *denote.link_mention*
+     Same as |denote.report.link_mention|.
+
+
+M.check()                                                         *denote.check*
+     Same as |denote.report.check|.
+
+
+M.sort_dired()                                               *denote.sort_dired*
+     Same as |denote.explorer.sort_dired|.
+
+
+M.journal_new_entry()                                 *denote.journal_new_entry*
+     Same as `require("denote.journal").new_entry()`.
+
+
+M.journal_new_or_existing_entry()         *denote.journal_new_or_existing_entry*
+     Same as `require("denote.journal").new_or_existing_entry()`.
+
+
+M.journal_link_or_create_entry()           *denote.journal_link_or_create_entry*
+     Same as `require("denote.journal").link_or_create_entry()`.
+
+
+M.sequence_new_parent()                             *denote.sequence_new_parent*
+     Same as |denote.sequence.new_parent|.
+
+
+M.sequence_new_child()                               *denote.sequence_new_child*
+     Same as |denote.sequence.new_child|.
+
+
+M.sequence_new_sibling()                           *denote.sequence_new_sibling*
+     Same as |denote.sequence.new_sibling|.
+
+
+M.sequence_find()                                         *denote.sequence_find*
+     Same as |denote.sequence.find|.
+
+
+M.sequence_find_relatives()                     *denote.sequence_find_relatives*
+     Same as |denote.sequence.find_relatives|.
+
+
+M.sequence_link()                                         *denote.sequence_link*
+     Same as |denote.sequence.link|.
+
+
+M.sequence_reparent()                                 *denote.sequence_reparent*
+     Same as |denote.sequence.reparent|.
+
+
+M.silo_create_note()                                   *denote.silo_create_note*
+     Same as |denote.silo.create_note|.
+
+
+M.silo_open_or_create()                             *denote.silo_open_or_create*
+     Same as |denote.silo.open_or_create|.
+
+
+M.silo_explorer()                                         *denote.silo_explorer*
+     Same as |denote.silo.explorer|.
+
+
+M.silo_switch()                                             *denote.silo_switch*
+     Same as |denote.silo.switch|.
+
+
+M.org_dblock_insert_links()                     *denote.org_dblock_insert_links*
+     Same as `require("denote.integrations.org").dblock_insert_links()`.
+
+
+M.org_dblock_insert_backlinks()             *denote.org_dblock_insert_backlinks*
+     Same as `require("denote.integrations.org").dblock_insert_backlinks()`.
+
+
+M.org_dblock_insert_files()                     *denote.org_dblock_insert_files*
+     Same as `require("denote.integrations.org").dblock_insert_files()`.
+
+
+M.org_dblock_update()                                 *denote.org_dblock_update*
+     Same as `require("denote.integrations.org").update_dblocks()`.
+
+
+==============================================================================
+Configuration defaults and accessors                             *denote.config*
+
+denote.FileTypeSpec                                        *denote.FileTypeSpec*
+
+    Fields: ~
+        {extension}             (string)                         File extension including leading dot (e.g. ".org", ".md")
+        {front_matter}          (string|fun(meta:table):string)  Front matter template or builder
+        {date_format?}          (string)                         os.date format or special token ("org", "iso8601", "date")
+        {link_format?}          (string)                         Link template with %s placeholders (id, description)
+        {link_id_only_format?}  (string)                         ID-only link template with %s placeholder (id)
+
+
+denote.JournalConfig                                      *denote.JournalConfig*
+
+    Fields: ~
+        {directory?}    (string|nil)  Directory for journal entries (nil -> <directory>/journal or <directory>)
+        {keyword}       (string)      Keyword tag added to journal entries
+        {title_format}  (string)      os.date format for journal note titles (e.g. "%A %e %B %Y")
+        {file_type?}    (string|nil)  Override default file_type for journal entries
+        {template?}     (string|nil)  Template name for journal entries
+
+
+denote.SequenceConfig                                    *denote.SequenceConfig*
+
+    Fields: ~
+        {scheme}  ()
+
+
+denote.MappingsConfig                                    *denote.MappingsConfig*
+
+    Fields: ~
+        {enabled}               (boolean)       Register default global keymaps
+        {prefix}                (string)        Leader prefix for global keymaps (default: "<leader>n")
+        {follow_link}           (string|false)  Buffer-local keymap to follow a denote: link (default: "<CR>")
+        {follow_link_fallback}  (boolean)       Fall back to native keymap when cursor is not on a denote: link
+        {preview_link}          (string|false)  Buffer-local keymap to preview the linked note (default: "K")
+
+
+denote.Config                                                    *denote.Config*
+
+
+M.opts                                                      *denote.config.opts*
+
+    Type: ~
+        (denote.Config)
+
+
+M.active_directory                              *denote.config.active_directory*
+     Active silo override (nil means use `M.opts.directory`).
+
+    Type: ~
+        (string|nil)
+
+
+M.setup({user_opts?})                                      *denote.config.setup*
+     Merge user options into `M.opts`.
+
+    Parameters: ~
+        {user_opts?}  (table)
+
+    Returns: ~
+        (denote.Config)
+
+
+M.canonicalize({path})                              *denote.config.canonicalize*
+     Resolve symlinks in `path` (e.g. macOS `/var` -> `/private/var`) so that paths built from
+     the Denote directory compare equal to buffer names, which Neovim stores resolved.
+     Non-existent trailing components are kept as-is on top of the nearest existing ancestor.
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.directory({dir?})                                    *denote.config.directory*
+     Return the currently active Denote directory (expanded and normalized).
+
+    Parameters: ~
+        {dir?}  (string)  Optional explicit directory override
+
+    Returns: ~
+        (string)
+
+
+==============================================================================
+Creating Denote notes (interactive prompts, templates, open-or-create, region)
+                                                               *denote.create*
+
+denote.CreateOpts                                            *denote.CreateOpts*
+
+    Fields: ~
+        {title?}         (string)
+        {keywords?}      (string[]|string)
+        {file_type?}     (string)
+        {subdirectory?}  (string)                       Subdirectory relative to `dir` (or absolute path)
+        {date?}          (string|integer)               Date string or Unix timestamp
+        {template?}      (string)                       Template key from `config.opts.templates`
+        {signature?}     (string)
+        {body?}          (string)                       Extra body text appended after front matter / template
+        {dir?}           (string)                       Explicit root directory override
+        {open?}          (boolean)                      Open the created note in Neovim (default: true)
+        {how?}           (string)                       Window open mode ("edit", "split", "vsplit", "tab")
+        {save?}          (boolean)                      Override `save_buffer_after_creation`
+        {prompts?}       (string[])                     Override prompt sequence for interactive creation
+        {interactive?}   (boolean)                      When false, create synchronously without prompting
+        {on_created?}    (fun(path:string,meta:table))  Callback after note is created
+
+
+M.create_sync({opts})                                *denote.create.create_sync*
+     Create a Denote note synchronously from resolved options (no prompts).
+     Writes the file to disk (or opens it in a buffer if `save == false` and `open == true`),
+     and returns `{ path, identifier, title, keywords, signature, file_type, date, bufnr }`.
+
+    Parameters: ~
+        {opts}  (denote.CreateOpts)
+
+    Returns: ~
+        (table)
+
+
+M.note({opts?})                                             *denote.create.note*
+     Primary note creation entry point (matching `M-x denote`).
+     If `opts.title` is supplied along with `opts.interactive == false` (or `opts.open == false`),
+     creates immediately without prompting; otherwise runs the configured `prompts` pipeline.
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+    Returns: ~
+        (table|nil)
+
+
+M.type({opts?})                                             *denote.create.type*
+     Create a note prompting for file type (`denote-type`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.date({opts?})                                             *denote.create.date*
+     Create a note prompting for custom date (`denote-date`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.subdirectory({opts?})                             *denote.create.subdirectory*
+     Create a note prompting for subdirectory (`denote-subdirectory`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.template({opts?})                                     *denote.create.template*
+     Create a note prompting for template (`denote-template`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.signature({opts?})                                   *denote.create.signature*
+     Create a note prompting for signature (`denote-signature`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.open_or_create({opts?})                         *denote.create.open_or_create*
+     Open an existing Denote note, or create a new one if no match is selected
+     (`denote-open-or-create`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string,prompts?:string[]})
+
+
+                                     *denote.create.open_or_create_with_command*
+M.open_or_create_with_command({opts?})
+     Open an existing note or choose which creation command to run (`denote-open-or-create-with-command`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string})
+
+
+M.region({opts?})                                         *denote.create.region*
+     Create a new Denote note containing the current visual selection (`denote-region`).
+     If invoked from a code buffer, wraps the region in an Org `#+begin_src <lang>` or
+     Markdown fenced code block matching the target note's syntax.
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)  & { line1?: integer, line2?: integer }
+
+
+==============================================================================
+Creating, parsing, following, finding, and converting Denote links
+                                                                *denote.links*
+
+ Full syntax support for:
+ - Org mode:      `[[denote:ID][Description]]`, `[[denote:ID]]`,
+                  `[[denote:ID::*Heading][Description]]`, `[[denote:ID::#custom-id][Description]]`,
+                  `[[denote:query-contents:QUERY][Description]]`, `[[denote:query-filenames:QUERY][Description]]`
+ - Markdown:      `[Description](denote:ID)`, `[Description](denote:ID::#heading-slug)`,
+                  `[[denote:ID|Description]]`, `[[denote:ID]]`,
+                  `[Description](denote:query-contents:QUERY)`, `[Description](denote:query-filenames:QUERY)`
+ - Plain text:    `[[denote:ID][Description]]`, `denote:ID`
+
+denote.Link                                                        *denote.Link*
+
+    Fields: ~
+        {kind}          ("id"|"query-contents"|"query-filenames")
+        {target}        (string)                                   Raw target after `denote:` (e.g. `20261123T191500` or `20261123T191500::*Heading`)
+        {identifier?}   (string)                                   15-char Denote identifier (when kind == "id")
+        {search?}       (string)                                   Optional search suffix after `::` (e.g. `*Heading`, `#custom-id`, `/regex/`)
+        {query?}        (string)                                   Search query (when kind is query-contents or query-filenames)
+        {description?}  (string)                                   Link display text
+        {syntax}        ("org"|"markdown"|"wiki"|"plain")
+        {start_col}     (integer)                                  1-based inclusive column
+        {end_col}       (integer)                                  1-based inclusive column
+        {lnum?}         (integer)                                  1-based line number
+        {raw}           (string)                                   Full matched link string
+
+
+M.buffer_syntax({bufnr?})                           *denote.links.buffer_syntax*
+     Determine the link syntax to use for a buffer or file path.
+
+    Parameters: ~
+        {bufnr?}  (integer)
+
+    Returns: ~
+        ("org"|"markdown"|"text")
+
+
+M.default_description({path})                 *denote.links.default_description*
+     Compute default description text for a Denote file.
+     Respects `link_description_format` (string with `%t`, `%s`, `%i`, `%k`, `%%` or function)
+     and `link_description_function`.
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.format_link({target}, {description?}, {opts?})      *denote.links.format_link*
+     Format a Denote link string for `syntax` ("org", "markdown", "text").
+
+    Parameters: ~
+        {target}        (string)                                                                                 Target after `denote:` (e.g. "20261123T191500" or "20261123T191500::#sec")
+        {description?}  (string)
+        {opts?}         ({syntax?:"org"|"markdown"|"text",id_only?:boolean,file_path?:string,from_dir?:string})
+
+    Returns: ~
+        (string)
+
+
+M.parse_target({target})                             *denote.links.parse_target*
+     Classify a raw `denote:` target string into `{ kind, identifier, search, query }`.
+
+    Parameters: ~
+        {target}  (string)
+
+    Returns: ~
+        ({kind:"id"|"query-contents"|"query-filenames",identifier?:string,search?:string,query?:string})
+
+
+M.parse_line({line}, {lnum?})                          *denote.links.parse_line*
+     Parse all Denote links on a single line.
+
+    Parameters: ~
+        {line}   (string)
+        {lnum?}  (integer)
+
+    Returns: ~
+        (denote.Link[])
+
+
+M.link_at_cursor({bufnr?}, {lnum?}, {col?})        *denote.links.link_at_cursor*
+     Find the Denote link under the cursor (or at `lnum`, 1-based `col`), or nil.
+
+    Parameters: ~
+        {bufnr?}  (integer)
+        {lnum?}   (integer)
+        {col?}    (integer)  1-based column
+
+    Returns: ~
+        (denote.Link|nil)
+
+
+M.links_in_buffer({bufnr?})                       *denote.links.links_in_buffer*
+     Collect all Denote links in a buffer.
+
+    Parameters: ~
+        {bufnr?}  (integer)
+
+    Returns: ~
+        (denote.Link[])
+
+
+M.insert_text({text}, {bufnr?})                       *denote.links.insert_text*
+     Insert `text` cleanly at the cursor position in `bufnr`.
+     Uses `nvim_put(..., "c", true, true)` in the current buffer so Normal-mode cursor on the
+     last character of `"See heading: "` appends AFTER the cursor rather than splitting the word,
+     while empty lines still insert at column 0 and multibyte UTF-8 characters are never sliced.
+
+    Parameters: ~
+        {text}    (string)
+        {bufnr?}  (integer)
+
+
+M.jump_to_search({search})                         *denote.links.jump_to_search*
+     Jump to a search target (`*Heading`, `#custom-id`, `#heading-slug`, `/regex/`, line number)
+     inside the currently open buffer.
+
+    Parameters: ~
+        {search}  (string)
+
+    Returns: ~
+        (boolean)
+
+
+M.follow_target({target}, {opts?})                  *denote.links.follow_target*
+     Follow a Denote target string (the part after `denote:`).
+     Works for direct IDs, IDs with `::search`, `query-contents:...`, and `query-filenames:...`.
+
+    Parameters: ~
+        {target}  (string)
+        {opts?}   ({how?:string})
+
+    Returns: ~
+        (boolean)
+
+
+M.follow_link({opts?})                                *denote.links.follow_link*
+     Follow the Denote link under the cursor.
+     Returns true if a Denote link was found and followed, false otherwise.
+
+    Parameters: ~
+        {opts?}  ({how?:string})
+
+    Returns: ~
+        (boolean)
+
+
+M.link({opts?})                                              *denote.links.link*
+     Insert a link to an existing Denote file (`denote-link`).
+
+    Parameters: ~
+        {opts?}  ({target?:string,description?:string,id_only?:boolean,dir?:string})
+
+
+M.link_or_create({opts?})                          *denote.links.link_or_create*
+     Link to an existing note or create a new note and insert a link to it
+     (`denote-link-or-create`).
+
+    Parameters: ~
+        {opts?}  ({id_only?:boolean,dir?:string})
+
+
+M.link_after_creating({opts?})                *denote.links.link_after_creating*
+     Create a new note, insert a link to it in the current buffer, and open the new note
+     (`denote-link-after-creating`).
+
+    Parameters: ~
+        {opts?}  ({id_only?:boolean,dir?:string})
+
+
+M.link_to_heading({opts?})                        *denote.links.link_to_heading*
+     Link directly to a specific heading inside an Org or Markdown Denote note
+     (`denote-org-link-to-heading`, also works for Markdown `#` headings).
+
+    Parameters: ~
+        {opts?}  ({target?:string,dir?:string})
+
+
+M.add_links({regexp?}, {opts?})                         *denote.links.add_links*
+     Insert a typographic list of links to all Denote files matching `regexp`
+     (`denote-add-links`).
+
+    Parameters: ~
+        {regexp?}  (string)
+        {opts?}    ({id_only?:boolean,sort_by?:string,reverse?:boolean,dir?:string,include_date?:boolean})
+
+    Returns: ~
+        (string[]|nil)  inserted_lines
+
+
+M.find_link()                                           *denote.links.find_link*
+     Pick from all outbound Denote links in the current buffer and jump to the target
+     (`denote-find-link`).
+
+
+                                       *denote.links.link_to_file_with_contents*
+M.link_to_file_with_contents({query?}, {opts?})
+     Link to a Denote file whose contents match `query` (`denote-link-to-file-with-contents`).
+
+    Parameters: ~
+        {query?}  (string)
+        {opts?}   ({id_only?:boolean,dir?:string})
+
+
+                                  *denote.links.link_to_all_files_with_contents*
+M.link_to_all_files_with_contents({query?}, {opts?})
+     Insert a list of links to all Denote files whose contents match `query`
+     (`denote-link-to-all-files-with-contents`).
+
+    Parameters: ~
+        {query?}  (string)
+        {opts?}   ({id_only?:boolean,sort_by?:string,reverse?:boolean,dir?:string})
+
+    Returns: ~
+        (string[]|nil)
+
+
+                                      *denote.links.link_or_create_with_command*
+M.link_or_create_with_command({opts?})
+     Link or create, prompting for which note-creation command to use
+     (`denote-link-or-create-with-command`).
+
+    Parameters: ~
+        {opts?}  ({id_only?:boolean,dir?:string})
+
+
+                                      *denote.links.convert_links_to_file_paths*
+M.convert_links_to_file_paths({bufnr?})
+     Convert `denote:ID` links in the current buffer into relative file links
+     (matching `denote-markdown-convert-links-to-file-paths`, also supports Org).
+
+    Parameters: ~
+        {bufnr?}  (integer)
+
+    Returns: ~
+        (integer)  Number of converted links
+
+
+                                    *denote.links.convert_links_to_denote_paths*
+M.convert_links_to_denote_paths({bufnr?})
+     Convert relative file links pointing to Denote files back into `denote:ID` links
+     (matching `denote-markdown-convert-links-to-denote-paths`, also supports Org).
+
+    Parameters: ~
+        {bufnr?}  (integer)
+
+    Returns: ~
+        (integer)  Number of converted links
+
+
+==============================================================================
+Backlinks discovery and interactive backlinks buffer          *denote.backlinks*
+
+ Mirrors Emacs `denote-backlinks` and `denote-find-backlink`:
+ - Finds every note in the Denote directory referencing the current note's identifier.
+ - Works with zero external dependencies (pure Lua scanner) and accelerates with `rg` when available.
+ - Opens an interactive split buffer showing file headers + matching context lines
+   with `<CR>` to jump, `o` other window, `f` toggle context/filenames-only, `r` refresh, `q` close.
+
+denote.BacklinkMatch                                      *denote.BacklinkMatch*
+
+    Fields: ~
+        {file}  (string)   Absolute path of linking file
+        {lnum}  (integer)  1-based line number of reference
+        {col}   (integer)  1-based column of reference
+        {text}  (string)   Trimmed line text
+
+
+M.find({identifier}, {opts?}, {on_done?})                *denote.backlinks.find*
+     Collect all backlinks referencing `identifier` across `dir` (excluding `exclude_file`).
+     Uses `rg` when available (see `denote.search`); pass `on_done` to run asynchronously.
+
+    Parameters: ~
+        {identifier}  (string)
+        {opts?}       ({dir?:string,exclude_file?:string,not_regexp?:string,excluded_dirs_regexp?:string})
+        {on_done?}    (fun(matches:denote.BacklinkMatch[]))
+
+    Returns: ~
+        (denote.BacklinkMatch[]|denote.SearchHandle)
+
+
+M.has_backlinks({identifier}, {path?})          *denote.backlinks.has_backlinks*
+     Return true if any note links to `identifier`. The answer is cached per identifier and
+     refreshed asynchronously, so this is cheap enough to call from a statusline.
+
+    Parameters: ~
+        {identifier}  (string)
+        {path?}       (string)  The note itself (excluded from the search)
+
+    Returns: ~
+        (boolean)
+
+
+M.files_for({identifier}, {opts?})                  *denote.backlinks.files_for*
+     Return deduplicated list of files that link to `identifier`.
+
+    Parameters: ~
+        {identifier}  (string)
+        {opts?}       ({dir?:string,exclude_file?:string,sort_by?:string,reverse?:boolean,not_regexp?:string,excluded_dirs_regexp?:string})
+
+    Returns: ~
+        (string[])
+
+
+M.find_backlink({file?})                        *denote.backlinks.find_backlink*
+     Jump to a backlink file via fuzzy picker (`denote-find-backlink`).
+
+    Parameters: ~
+        {file?}  (string)
+
+
+                                  *denote.backlinks.find_backlink_with_location*
+M.find_backlink_with_location({file?})
+     Jump directly to the exact line of a backlink via fuzzy picker
+     (`denote-find-backlink-with-location`).
+
+    Parameters: ~
+        {file?}  (string)
+
+
+M.open({opts?})                                          *denote.backlinks.open*
+     Open the interactive Backlinks buffer for `file` (default: current buffer),
+     matching Emacs `denote-backlinks`.
+
+    Parameters: ~
+        {opts?}  ({file?:string,show_context?:boolean,dir?:string})
+
+
+==============================================================================
+Full-text grep and Denote 4.0 query links                         *denote.query*
+
+ Implements:
+ - `grep(query, opts)`: fast full-text search across Denote notes (uses `rg` if installed,
+   with pure-Lua fallback so it works with zero external binaries).
+ - Interactive `*Denote query*` buffer matching Emacs `denote-query-mode`:
+   `<CR>` jump, `o` other window, `f` narrow/filter, `x` exclude matches, `c` clear filters,
+   `r` refresh, `q` close.
+ - `query_contents_link` (`denote-query-contents-link`): inserts `denote:query-contents:...`
+ - `query_filenames_link` (`denote-query-filenames-link`): inserts `denote:query-filenames:...`
+
+denote.GrepMatch                                              *denote.GrepMatch*
+
+    Fields: ~
+        {file}  (string)
+        {lnum}  (integer)
+        {col}   (integer)
+        {text}  (string)
+
+
+M.search_contents({query}, {opts?}, {on_done?})   *denote.query.search_contents*
+     Search contents of Denote text files in `dir` (or explicit `opts.files`) matching `query`.
+     Uses `rg` when available with a pure-Lua fallback so it works with zero external binaries
+     (see `denote.search`). Pass `on_done` to search asynchronously.
+
+    Parameters: ~
+        {query}     (string)
+        {opts?}     ({dir?:string,files?:string[],file_regexp?:string,case_sensitive?:boolean,fixed?:boolean})
+        {on_done?}  (fun(matches:denote.GrepMatch[]))
+
+    Returns: ~
+        (denote.GrepMatch[]|denote.SearchHandle)
+
+
+M.grep({query?}, {opts?})                                    *denote.query.grep*
+     Open the interactive Denote grep / query results buffer (`denote-grep`).
+     Supports all Denote 4.3.1 query refinement commands:
+       f: include files matching regexp (`denote-query-only-include-files`)
+       x: exclude files matching regexp (`denote-query-exclude-files`)
+       k: include files with keyword(s) (`denote-query-only-include-files-with-keywords`)
+       K: exclude files with keyword(s) (`denote-query-exclude-files-with-keywords`)
+       /: focus search — grep new query only in currently matched files (`denote-query-focus-last-search`)
+       S: sort matched files by component (`denote-query-sort-last-search`)
+       c: clear all filters (`denote-query-clear-all-filters`)
+
+    Parameters: ~
+        {query?}  (string)
+        {opts?}   ({dir?:string,files?:string[],file_regexp?:string})
+
+
+                                  *denote.query.grep_files_referenced_in_region*
+M.grep_files_referenced_in_region({query?}, {opts?})
+     Search `query` only inside Denote files referenced between `line1` and `line2`
+     (`denote-grep-files-referenced-in-region`).
+
+    Parameters: ~
+        {query?}  (string)
+        {opts?}   ({line1?:integer,line2?:integer,bufnr?:integer})
+
+
+                                              *denote.query.query_contents_link*
+M.query_contents_link({query?}, {description?})
+     Insert a `query-contents` link at cursor (`denote-query-contents-link`).
+
+    Parameters: ~
+        {query?}        (string)
+        {description?}  (string)
+
+
+                                             *denote.query.query_filenames_link*
+M.query_filenames_link({query?}, {description?})
+     Insert a `query-filenames` link at cursor (`denote-query-filenames-link`).
+
+    Parameters: ~
+        {query?}        (string)
+        {description?}  (string)
+
+
+==============================================================================
+Shared full-text search engine (ripgrep with pure-Lua fallback)  *denote.search*
+
+ Every content search in denote.nvim (grep, query links, backlinks, unlinked mentions)
+ goes through `M.run`, so results are consistent no matter which backend runs:
+
+ - `rg` is used when installed (`search.ripgrep = true`), always with `--no-ignore --hidden`
+   so `.gitignore`d or dot-directories never hide notes. Candidates are always filtered by the
+   Denote file index, so excluded directories/files behave the same as in the Lua path.
+ - Exit code 1 ("no matches") is a valid empty result, not a reason to rescan in Lua.
+ - Loaded buffers with unsaved changes are searched from the buffer, not from disk.
+ - Case handling is the same everywhere: "smart" (default) is case-insensitive unless the
+   pattern contains an uppercase letter.
+ - Regex dialect: Rust regex with `rg`, Vim "very magic" (`\v`) without it. Both treat
+   `| ( ) + ? {n}` as operators, so common patterns behave the same.
+
+ Pass a callback to run asynchronously (UI never blocks); omit it to get results directly.
+
+denote.SearchMatch                                          *denote.SearchMatch*
+
+    Fields: ~
+        {file}  (string)   Absolute path
+        {lnum}  (integer)  1-based line number
+        {col}   (integer)  1-based byte column of the first match on the line
+        {text}  (string)   Trimmed line text
+
+
+denote.SearchSpec                                            *denote.SearchSpec*
+
+    Fields: ~
+        {pattern}  (string)                             Regex (or literal string with `fixed = true`)
+        {files}    (string[])                           Candidate files (only matches inside these are returned)
+        {fixed?}   (boolean)                            Treat `pattern` as a literal string
+        {case?}    ("smart"|"sensitive"|"insensitive")  Default "smart"
+        {root?}    (string)                             Directory to hand to `rg` when there are many candidates
+
+
+M.use_ripgrep()                                      *denote.search.use_ripgrep*
+     Return true when ripgrep should be used.
+
+    Returns: ~
+        (boolean)
+
+
+M.reset()                                                  *denote.search.reset*
+     Reset the cached `rg` executable check (tests / PATH changes).
+
+
+M.matcher({spec})                                        *denote.search.matcher*
+     Build a line matcher for the pure-Lua path. Returns fun(line): col|nil.
+
+    Parameters: ~
+        {spec}  (denote.SearchSpec)
+
+    Returns: ~
+        (fun(line:string):integer|nil)
+
+
+denote.SearchHandle                                        *denote.SearchHandle*
+
+    Fields: ~
+        {cancel}  (fun())
+
+
+M.run({spec}, {on_done?})                                    *denote.search.run*
+     Run a search. With `on_done`, runs asynchronously and returns a handle; otherwise blocks
+     and returns the matches.
+
+    Parameters: ~
+        {spec}      (denote.SearchSpec)
+        {on_done?}  (fun(matches:denote.SearchMatch[]))
+
+    Returns: ~
+        (denote.SearchMatch[]|denote.SearchHandle)
+
+
+==============================================================================
+Hover preview of the note behind a `denote:` link               *denote.preview*
+
+ `:Denote preview` (default buffer-local `K` on a link) opens a floating window with the
+ target note's title, identifier, keywords, and the first lines of its body (starting at the
+ linked heading for `denote:ID::#heading` / `::*Heading` links). Press `K` again to focus the
+ float, `q` / `<Esc>` inside it to close, or `<CR>` to open the note.
+
+M.build({path}, {search?})                                *denote.preview.build*
+     Build the preview lines for the note at `path`.
+
+    Parameters: ~
+        {path}     (string)
+        {search?}  (string)
+
+    Returns: ~
+        (string[])  lines
+        (string)    filetype
+
+
+M.close()                                                 *denote.preview.close*
+     Close the preview window if open.
+
+
+M.open({link?})                                            *denote.preview.open*
+     Preview the Denote link under the cursor (or the given link) in a floating window.
+
+    Parameters: ~
+        {link?}  (denote.Link)
+
+    Returns: ~
+        (integer|nil)  win
+
+
+==============================================================================
+Vault-wide reports: unlinked mentions, broken links, orphan notes
+                                                               *denote.report*
+
+ - `:Denote unlinked_mentions` lists every line in other notes that mentions the current
+   note's title without linking to it (quickfix list). Jump to one and run
+   `:Denote link_mention` to turn that mention into a `denote:` link.
+ - `:Denote check` scans all notes and fills the quickfix list with broken `denote:` links
+   and orphan notes (notes no other note links to).
+
+M.last_mention_target                        *denote.report.last_mention_target*
+     Target of the last `unlinked_mentions` run (used by `link_mention`).
+
+    Type: ~
+        ({path:string,identifier:string,title:string}|nil)
+
+
+M.unlinked_mentions({opts?}, {on_done?})       *denote.report.unlinked_mentions*
+     Find mentions of a note's title in other notes that do not link to it.
+
+    Parameters: ~
+        {opts?}     ({file?:string,quickfix?:boolean,sync?:boolean})
+        {on_done?}  (fun(matches:denote.SearchMatch[]))
+
+    Returns: ~
+        (denote.SearchMatch[]|denote.SearchHandle|nil)
+
+
+M.link_mention({target?})                           *denote.report.link_mention*
+     Replace the first mention of the last `unlinked_mentions` target on the current line with
+     a `denote:` link (description keeps the text exactly as written).
+
+    Parameters: ~
+        {target?}  ({identifier:string,title:string})
+
+    Returns: ~
+        (boolean)
+
+
+denote.CheckReport                                          *denote.CheckReport*
+
+    Fields: ~
+        {broken}   ({file:string,lnum:integer,col:integer,identifier:string}[])
+        {orphans}  (string[])                                                    Notes no other note links to
+
+
+M.check({opts?}, {on_done?})                               *denote.report.check*
+     Scan every note for broken links and orphans.
+     Without `on_done` returns the report directly; with it, runs asynchronously.
+
+    Parameters: ~
+        {opts?}     ({quickfix?:boolean,orphans?:boolean})
+        {on_done?}  (fun(report:denote.CheckReport))
+
+    Returns: ~
+        (denote.CheckReport|denote.SearchHandle)
+
+
+==============================================================================
+Renaming Denote files and syncing front matter                   *denote.rename*
+
+ Supports two-way synchronization between Denote filenames and front matter:
+ - `rename_file`: rename ANY file (including PDFs, images, non-Denote files) into
+   Denote's naming scheme and optionally update/add front matter.
+ - `rename_file_title`, `rename_file_keywords`, `rename_file_signature`, `rename_file_date`
+ - `rename_file_using_front_matter`: sync filename on disk from edits inside front matter.
+ - `add_front_matter`: prepend Denote front matter to a note lacking it.
+ - `keywords_add` / `keywords_remove`: quick keyword edits.
+ - `format_buffer_name` / `statusline`: Denote rename-buffer display formatting.
+
+M.is_renaming({bufnr})                               *denote.rename.is_renaming*
+     Return true when `bufnr` is currently being written by `denote.rename`.
+
+    Parameters: ~
+        {bufnr}  (integer)
+
+    Returns: ~
+        (boolean)
+
+
+denote.RenameOpts                                            *denote.RenameOpts*
+
+    Fields: ~
+        {file?}                  (string)           Target file path (default: current buffer)
+        {title?}                 (string)           New title (pass "" to remove title)
+        {keywords?}              (string[]|string)  New keywords (pass {} to remove keywords)
+        {signature?}             (string)           New signature (pass "" to remove signature)
+        {identifier?}            (string)           New identifier (keeps existing or generates from mtime/now)
+        {date?}                  (string|integer)   New date (recomputes identifier)
+        {rewrite_front_matter?}  (boolean)          Default true for supported text file types
+        {add_front_matter?}      (boolean)          Add front matter if missing (default false)
+
+
+M.rename_sync({opts})                                *denote.rename.rename_sync*
+     Synchronously rename `file` with the provided component updates and sync front matter.
+
+    Parameters: ~
+        {opts}  (denote.RenameOpts)
+
+    Returns: ~
+        (string|nil)  new_path
+        (string|nil)  err
+
+
+M.rename_file({file?}, {on_done?})                   *denote.rename.rename_file*
+     Interactively rename a file (title, keywords, signature) matching `denote-rename-file`.
+
+    Parameters: ~
+        {file?}     (string)                                   Target file path (default: current buffer)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))  Optional callback after completion
+
+
+M.rename_file_title({file?}, {on_done?})       *denote.rename.rename_file_title*
+     Interactively rename only the title (`denote-rename-file-title`).
+
+    Parameters: ~
+        {file?}     (string)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))
+
+
+M.rename_file_keywords({file?}, {on_done?}) *denote.rename.rename_file_keywords*
+     Interactively rename only the keywords (`denote-rename-file-keywords`).
+
+    Parameters: ~
+        {file?}     (string)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))
+
+
+                                           *denote.rename.rename_file_signature*
+M.rename_file_signature({file?}, {on_done?})
+     Interactively rename only the signature (`denote-rename-file-signature`).
+
+    Parameters: ~
+        {file?}     (string)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))
+
+
+M.rename_file_date({file?}, {on_done?})         *denote.rename.rename_file_date*
+     Interactively change the date / identifier (`denote-rename-file-date`).
+
+    Parameters: ~
+        {file?}     (string)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))
+
+
+                                  *denote.rename.rename_file_using_front_matter*
+M.rename_file_using_front_matter({file?})
+     Rename a file on disk using the metadata currently in its front matter
+     (`denote-rename-file-using-front-matter`).
+
+    Parameters: ~
+        {file?}  (string)
+
+    Returns: ~
+        (string|nil)  new_path
+        (string|nil)  err
+
+
+M.add_front_matter({file?})                     *denote.rename.add_front_matter*
+     Add Denote front matter to a file that doesn't have one (`denote-add-front-matter`).
+
+    Parameters: ~
+        {file?}  (string)
+
+    Returns: ~
+        (boolean)
+        (string|nil)
+
+
+M.keywords_add({keywords}, {file?})                 *denote.rename.keywords_add*
+     Add keywords to `file` (updating filename and front matter) (`denote-keywords-add`).
+
+    Parameters: ~
+        {keywords}  (string[]|string|nil)  Pass nil to prompt interactively
+        {file?}     (string)
+
+    Returns: ~
+        (string|nil)
+        (string|nil)
+
+
+M.keywords_remove({keywords}, {file?})           *denote.rename.keywords_remove*
+     Remove keywords from `file` (updating filename and front matter) (`denote-keywords-remove`).
+
+    Parameters: ~
+        {keywords}  (string[]|string|nil)  Pass nil to prompt interactively
+        {file?}     (string)
+
+    Returns: ~
+        (string|nil)
+        (string|nil)
+
+
+                                          *denote.rename.rename_file_identifier*
+M.rename_file_identifier({file?}, {on_done?})
+     Interactively change the identifier directly (`denote-rename-file-identifier`).
+
+    Parameters: ~
+        {file?}     (string)
+        {on_done?}  (fun(new_path:string|nil,err:string|nil))
+
+
+                               *denote.rename.change_file_type_and_front_matter*
+M.change_file_type_and_front_matter({file?}, {new_file_type?})
+     Change the file type (extension) and rewrite front matter into the new format
+     (`denote-change-file-type-and-front-matter`).
+     Converts e.g. Markdown (YAML/TOML) <-> Org <-> Plain Text without losing metadata or body.
+
+    Parameters: ~
+        {file?}           (string)
+        {new_file_type?}  (string)
+
+    Returns: ~
+        (string|nil)  new_path
+        (string|nil)  err
+
+
+M.format_buffer_name({bufnr?}, {fmt?})        *denote.rename.format_buffer_name*
+     Format a human-friendly buffer label (matching `denote-rename-buffer-format`).
+     Specifiers:
+       %t  front matter title (or filename title)
+       %T  filename title (desluggified)
+       %i  identifier (`YYYYMMDDTHHMMSS`)
+       %I  human date from identifier (`Mon, 23 Nov 2026`)
+       %d  identifier (DATE mnemonic, same as %i)
+       %D  DWIM: %t if non-empty, else %I, else %i (upstream default)
+       %s  signature
+       %k  keywords
+       %b  backlinks indicator (`rename_buffer_backlinks_indicator`) if note has backlinks
+       %%  literal `%`
+
+    Parameters: ~
+        {bufnr?}  (integer)
+        {fmt?}    (string)
+
+    Returns: ~
+        (string)
+
+
+==============================================================================
+Front matter generation, parsing, and in-place rewriting    *denote.frontmatter*
+
+ Supports all four canonical Emacs Denote file types:
+ - `org` (`.org`): `#+title:`, `#+date:`, `#+filetags:`, `#+identifier:`, `#+signature:`
+ - `markdown-yaml` (`.md`): YAML front matter delimited by `---`
+ - `markdown-toml` (`.md`): TOML front matter delimited by `+++`
+ - `text` (`.txt`): plain text key/value header terminated by `---------------------------`
+ Plus user-defined custom file types in `config.opts.file_types`.
+
+M.file_types()                                   *denote.frontmatter.file_types*
+     Return all configured file types (built-ins merged with user overrides).
+
+    Returns: ~
+        (table<string,table>)
+
+
+M.get_spec({file_type?})                           *denote.frontmatter.get_spec*
+     Return the file type spec for `file_type` (defaults to `config.opts.file_type`).
+
+    Parameters: ~
+        {file_type?}  (string)
+
+    Returns: ~
+        (table)
+        (string)
+
+
+M.extension_for({file_type?})                 *denote.frontmatter.extension_for*
+     Return the extension for a given file type.
+
+    Parameters: ~
+        {file_type?}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.detect_file_type({path}, {lines?})       *denote.frontmatter.detect_file_type*
+     Detect the Denote file type from a file path and optional lines.
+
+    Parameters: ~
+        {path}    (string)
+        {lines?}  (string[])
+
+    Returns: ~
+        (string|nil)
+
+
+M.format_date({ts}, {file_type})                *denote.frontmatter.format_date*
+     Format a Unix timestamp according to a file type's date format.
+
+    Parameters: ~
+        {ts}         (integer)
+        {file_type}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.format_keywords({keywords}, {file_type})  *denote.frontmatter.format_keywords*
+     Format keywords for each built-in front matter format.
+
+    Parameters: ~
+        {keywords}   (string[])
+        {file_type}  (string)
+
+    Returns: ~
+        (string)
+
+
+denote.FrontMatterMeta                                  *denote.FrontMatterMeta*
+
+    Fields: ~
+        {title?}       (string)
+        {date?}        (integer|string)  Unix timestamp or preformatted string
+        {keywords?}    (string[])
+        {identifier?}  (string)
+        {signature?}   (string)
+        {file_type?}   (string)
+
+
+M.format({meta})                                     *denote.frontmatter.format*
+     Build the front matter string (including trailing blank line) for a file type.
+
+    Parameters: ~
+        {meta}  (denote.FrontMatterMeta)
+
+    Returns: ~
+        (string)
+
+
+denote.ParsedFrontMatter                              *denote.ParsedFrontMatter*
+
+    Fields: ~
+        {title?}            (string)
+        {date?}             (string)
+        {keywords?}         (string[])
+        {identifier?}       (string)
+        {signature?}        (string)
+        {file_type}         (string)
+        {start_line}        (integer)   1-based start line of front matter (0 if none)
+        {end_line}          (integer)   1-based end line of front matter (0 if none)
+        {has_front_matter}  (boolean)
+
+
+M.parse_lines({lines}, {file_type})             *denote.frontmatter.parse_lines*
+     Parse front matter from `lines` for the given `file_type`.
+
+    Parameters: ~
+        {lines}      (string[])
+        {file_type}  (string)
+
+    Returns: ~
+        (denote.ParsedFrontMatter)
+
+
+M.parse_file({path})                             *denote.frontmatter.parse_file*
+     Parse front matter from a file on disk (or its loaded buffer if modified).
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (denote.ParsedFrontMatter|nil)
+
+
+M.clear_cache()                                 *denote.frontmatter.clear_cache*
+     Clear the front matter title cache.
+
+
+M.extract_title({path})                       *denote.frontmatter.extract_title*
+     Extract the human-readable title of a Denote file:
+     front matter `title` if present and non-empty, otherwise desluggified filename title,
+     otherwise filename stem.
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (string)
+
+
+                                              *denote.frontmatter.rewrite_lines*
+M.rewrite_lines({lines}, {file_type}, {updates}, {opts?})
+     Rewrite front matter fields (`title`, `keywords`, `signature`, `identifier`) in `lines`
+     in place, preserving all other user-defined front matter lines and body content.
+     If the file has no front matter and `opts.add_if_missing` is true, prepends front matter.
+
+    Parameters: ~
+        {lines}      (string[])
+        {file_type}  (string)
+        {updates}    ({title?:string,keywords?:string[],signature?:string,identifier?:string,date?:integer|string})
+        {opts?}      ({add_if_missing?:boolean})
+
+    Returns: ~
+        (string[])  new_lines
+        (boolean)   changed
+
+
+                                         *denote.frontmatter.strip_front_matter*
+M.strip_front_matter({lines}, {file_type})
+     Strip front matter from `lines` (used by `denote-files` dynamic block `:no-front-matter t`).
+
+    Parameters: ~
+        {lines}      (string[])
+        {file_type}  (string|nil)
+
+    Returns: ~
+        (string[])
+
+
+denote.Heading                                                  *denote.Heading*
+
+    Fields: ~
+        {text}        (string)   Heading title text
+        {level}       (integer)  Heading level (1+)
+        {lnum}        (integer)  1-based line number
+        {custom_id?}  (string)   Org `:CUSTOM_ID:` property if present
+        {slug}        (string)   URL/anchor slug for Markdown headings
+
+
+M.extract_headings({path})                 *denote.frontmatter.extract_headings*
+     Extract all headings from an Org or Markdown file (for `DenoteLinkToHeading` and following `::*Heading` / `::#id`).
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (denote.Heading[])
+
+
+==============================================================================
+Denote file-naming scheme, parser, sluggifier, and identifier generator
+                                                               *denote.naming*
+
+ Implements the canonical Emacs Denote file-naming scheme:
+   DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION
+ as well as Denote 3.x/4.x reordered components (`@@DATE` when identifier is not first),
+ partial Denote filenames, compound extensions (e.g. `.org.gpg`), sluggification,
+ desluggification, and collision-free identifier generation.
+
+M.remove_punctuation({str})                   *denote.naming.remove_punctuation*
+     Remove excluded punctuation from `str`.
+
+    Parameters: ~
+        {str}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.sluggify_title({str})                           *denote.naming.sluggify_title*
+     Sluggify a title string into kebab-case (matching `denote-sluggify-title`).
+
+    Parameters: ~
+        {str}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.sluggify_signature({str})                   *denote.naming.sluggify_signature*
+     Sluggify a signature string using `=` as word separator (matching `denote-sluggify-signature`).
+
+    Parameters: ~
+        {str}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.sluggify_keyword({str})                       *denote.naming.sluggify_keyword*
+     Sluggify a single keyword (matching `denote-sluggify-keyword`).
+     In Denote, keywords have no spaces, hyphens, or underscores.
+
+    Parameters: ~
+        {str}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.sluggify_keywords({keywords})                *denote.naming.sluggify_keywords*
+     Sluggify a list of keywords (deduplicating and optionally sorting).
+
+    Parameters: ~
+        {keywords}  (string[]|string|nil)
+
+    Returns: ~
+        (string[])
+
+
+M.sluggify({component}, {str})                          *denote.naming.sluggify*
+     General sluggify dispatcher (`component` is "title", "signature", or "keyword").
+
+    Parameters: ~
+        {component}  ("title"|"signature"|"keyword")
+        {str}        (string)
+
+    Returns: ~
+        (string)
+
+
+M.desluggify({component}, {str})                      *denote.naming.desluggify*
+     Convert a slug back into a human-readable string (matching `denote-desluggify`).
+
+    Parameters: ~
+        {component}  ("title"|"signature"|"keyword")
+        {str}        (string)
+
+    Returns: ~
+        (string)
+
+
+M.split_extension({basename})                    *denote.naming.split_extension*
+     Split a basename into stem and extension (handling compound extensions like `.org.gpg`).
+
+    Parameters: ~
+        {basename}  (string)
+
+    Returns: ~
+        (string)  stem
+        (string)  extension
+
+
+denote.ParsedFile                                            *denote.ParsedFile*
+
+    Fields: ~
+        {path}        (string)      Full normalized path (or basename if no directory was given)
+        {dir}         (string)      Parent directory ("" if basename only)
+        {filename}    (string)      Basename including extension
+        {identifier}  (string|nil)  15-char timestamp ID (YYYYMMDDTHHMMSS)
+        {signature}   (string|nil)  Signature string (without leading `==`)
+        {title}       (string|nil)  Slugified title (without leading `--`)
+        {keywords}    (string[])    List of keywords (empty table if none)
+        {extension}   (string)      Extension including leading dot (e.g. ".org", ".md", "")
+        {is_denote}   (boolean)     True when the file has a valid Denote identifier
+
+
+M.parse_filename({path})                          *denote.naming.parse_filename*
+     Parse a file path or basename into its Denote components.
+     Handles standard order (`DATE==SIG--TITLE__KW.ext`) as well as any custom
+     `file_name_components_order` (`@@DATE`, `==SIG`, `--TITLE`, `__KW`).
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (denote.ParsedFile)
+
+
+M.is_denote_file({path})                          *denote.naming.is_denote_file*
+     Return true if `path` is a Denote file (has a valid identifier).
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (boolean)
+
+
+M.format_filename({opts})                        *denote.naming.format_filename*
+     Format a Denote filename (basename only) from its components.
+
+    Parameters: ~
+        {opts}  ({identifier?:string,signature?:string,title?:string,keywords?:string[]|string,extension?:string,sluggify?:boolean})
+
+    Returns: ~
+        (string)
+
+
+M.format_identifier({ts?})                     *denote.naming.format_identifier*
+     Format a Unix timestamp into a Denote identifier (`YYYYMMDDTHHMMSS`).
+
+    Parameters: ~
+        {ts?}  (integer)
+
+    Returns: ~
+        (string)
+
+
+M.identifier_to_time({id})                    *denote.naming.identifier_to_time*
+     Parse a Denote identifier (`YYYYMMDDTHHMMSS`) back into a Unix timestamp.
+
+    Parameters: ~
+        {id}  (string)
+
+    Returns: ~
+        (integer|nil)
+
+
+M.unique_identifier({ts?}, {existing_ids?})    *denote.naming.unique_identifier*
+     Generate a unique Denote identifier that does not collide with any existing
+     file in `existing_ids` (a set table `{ [id] = true }`).
+
+    Parameters: ~
+        {ts?}            (integer)                Base timestamp (defaults to `os.time()`)
+        {existing_ids?}  (table<string,boolean>)  Set of already-used identifiers
+
+    Returns: ~
+        (string)
+
+
+M.retrieve_identifier({path})                *denote.naming.retrieve_identifier*
+     Extract an identifier from a file path, or nil.
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (string|nil)
+
+
+==============================================================================
+Fast directory scanning, file lookup, and keyword discovery       *denote.files*
+
+denote.IndexEntry                                            *denote.IndexEntry*
+     In-memory index of directory trees, keyed by root.
+
+     Each entry holds every (non-excluded) file below the root plus the mtime of every
+     directory that was scanned. Adding, removing, or renaming an entry changes the mtime of
+     its parent directory, so validating an entry only needs one `stat` per directory instead
+     of a full recursive `scandir`. Operations performed by denote.nvim itself also call
+     `M.invalidate()` explicitly (covers filesystems with coarse mtime resolution).
+
+    Fields: ~
+        {files}          (string[])               Sorted absolute paths
+        {dirs}           (table<string,string>)   Directory path -> mtime key
+        {ids?}           (table<string,string>)   Identifier -> first path (built lazily)
+        {denote?}        (table<string,boolean>)  Path -> is a Denote file (built lazily)
+        {text?}          (table<string,boolean>)  Path -> has a text note extension (built lazily)
+        {validated_at?}  (integer)                Loop time (`uv.now()`) of the last freshness check
+
+
+M.touch()                                                   *denote.files.touch*
+     Signal that note *contents* changed (e.g. a buffer was saved) without forcing a rescan of
+     directory listings. Content-derived caches (backlink indicators) refresh on next use.
+
+
+M.invalidate({dir?})                                   *denote.files.invalidate*
+     Drop cached directory listings (all roots, or only `dir`).
+
+    Parameters: ~
+        {dir?}  (string)
+
+
+M.is_text_file({path}, {exts?})                      *denote.files.is_text_file*
+     Return true if `path` has a text note extension (`.org`, `.md`, `.txt`, or a custom file type).
+
+    Parameters: ~
+        {path}   (string)
+        {exts?}  (table<string,boolean>)
+
+    Returns: ~
+        (boolean)
+
+
+M.list({opts?})                                              *denote.files.list*
+     Recursively list all files in `dir` (default: active Denote directory).
+     Results come from a cached index that is revalidated cheaply on every call.
+
+    Parameters: ~
+        {opts?}  ({dir?:string,denote_only?:boolean,text_only?:boolean,regexp?:string,not_regexp?:string,excluded_dirs_regexp?:string})
+
+    Returns: ~
+        (string[])
+
+
+M.subdirectories({dir?}, {include_root?})          *denote.files.subdirectories*
+     List all subdirectories inside `dir` (including `dir` itself as `"."` if `include_root` is true).
+
+    Parameters: ~
+        {dir?}           (string)
+        {include_root?}  (boolean)
+
+    Returns: ~
+        (string[])  paths
+
+
+M.identifier_set({dir?})                           *denote.files.identifier_set*
+     Return a set `{ [identifier] = true }` of all identifiers currently present in `dir`.
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (table<string,boolean>)
+
+
+M.search_dirs({dir?})                                 *denote.files.search_dirs*
+     Directories searched when resolving a link identifier: the given/active directory,
+     then every configured silo and the journal directory (deduplicated).
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (string[])
+
+
+M.has_id({id}, {dir?})                                     *denote.files.has_id*
+     Return true if `id` resolves to an existing file (same lookup rules as `find_by_id`).
+
+    Parameters: ~
+        {id}    (string)
+        {dir?}  (string)
+
+    Returns: ~
+        (boolean)
+
+
+M.find_by_id({id}, {dir?})                             *denote.files.find_by_id*
+     Find a Denote file by its unique identifier across the active directory (and silos if not found).
+
+    Parameters: ~
+        {id}    (string)
+        {dir?}  (string)
+
+    Returns: ~
+        (string|nil)
+
+
+M.keywords({dir?})                                       *denote.files.keywords*
+     Collect all known + inferred keywords from Denote files in `dir`.
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (string[])
+
+
+M.mtime({path})                                             *denote.files.mtime*
+     Return file mtime (seconds) for sorting.
+
+    Parameters: ~
+        {path}  (string)
+
+    Returns: ~
+        (integer)
+
+
+==============================================================================
+Interactive Denote Explorer (Dired / Menu / Sort-Dired buffer) *denote.explorer*
+
+ Combines Emacs `denote-dired-mode`, `denote-sort-dired`, and `denote-menu` into
+ an idiomatic, colorized Neovim buffer with filtering, sorting, marking, and
+ single or batch renaming.
+
+M.open({opts?})                                           *denote.explorer.open*
+     Open the interactive Denote Explorer buffer.
+
+    Parameters: ~
+        {opts?}  ({dir?:string,regexp?:string,keyword?:string,sort_by?:string,reverse?:boolean,denote_only?:boolean})
+
+    Returns: ~
+        (integer)  bufnr
+
+
+M.sort_dired({opts?})                               *denote.explorer.sort_dired*
+     Prompt for a regexp and sort component, then open the explorer (`denote-sort-dired`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string})
+
+
+==============================================================================
+Folgezettel / hierarchical sequence notes (matching `denote-sequence`)
+                                                             *denote.sequence*
+
+ Supports both sequence schemes from Emacs `denote-sequence`:
+ - `"numeric"`:      `1`, `2`, `1=1`, `1=2`, `1=1=1`
+ - `"alphanumeric"`: `1`, `2`, `1a`, `1b`, `1a1`, `1a2`, `1a1a`
+
+ Provides:
+ - `new_parent`, `new_child`, `new_sibling`
+ - `relatives` / `find_relatives` (parent, children, siblings, all)
+ - `find` / `link` / `reparent`
+
+M.scheme()                                              *denote.sequence.scheme*
+     Return the active sequence scheme ("numeric" or "alphanumeric").
+
+    Returns: ~
+        ("numeric"|"alphanumeric")
+
+
+M.split({sig}, {scheme?})                                *denote.sequence.split*
+     Split a sequence signature into depth segments.
+     Numeric: `"1=2=1"` -> `{ "1", "2", "1" }`
+     Alphanumeric: `"1a2b"` -> `{ "1", "a", "2", "b" }`
+
+    Parameters: ~
+        {sig}      (string)
+        {scheme?}  ("numeric"|"alphanumeric")
+
+    Returns: ~
+        (string[])
+
+
+M.join({parts}, {scheme?})                                *denote.sequence.join*
+     Join sequence segments back into a signature string.
+
+    Parameters: ~
+        {parts}    (string[])
+        {scheme?}  ("numeric"|"alphanumeric")
+
+    Returns: ~
+        (string)
+
+
+M.is_valid({sig}, {scheme?})                          *denote.sequence.is_valid*
+     Check whether `sig` is a valid sequence signature under `scheme`.
+
+    Parameters: ~
+        {sig}      (string|nil)
+        {scheme?}  ("numeric"|"alphanumeric")
+
+    Returns: ~
+        (boolean)
+
+
+M.parent_of({sig}, {scheme?})                        *denote.sequence.parent_of*
+     Return the parent signature of `sig`, or nil if `sig` is top-level.
+
+    Parameters: ~
+        {sig}      (string)
+        {scheme?}  ("numeric"|"alphanumeric")
+
+    Returns: ~
+        (string|nil)
+
+
+M.all_files({dir?})                                  *denote.sequence.all_files*
+     Return all Denote files in `dir` that have a valid sequence signature, sorted naturally.
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (string[])
+
+
+M.signature_map({dir?})                          *denote.sequence.signature_map*
+     Return a set `{ [sig] = path }` of existing sequence signatures.
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (table<string,string>)
+
+
+M.next_parent({dir?})                              *denote.sequence.next_parent*
+     Compute the next available top-level parent signature (`1`, `2`, `3`, ...).
+
+    Parameters: ~
+        {dir?}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.next_child({parent_sig}, {dir?})                  *denote.sequence.next_child*
+     Compute the next available child signature under `parent_sig`.
+
+    Parameters: ~
+        {parent_sig}  (string)
+        {dir?}        (string)
+
+    Returns: ~
+        (string)
+
+
+M.next_sibling({sig}, {dir?})                     *denote.sequence.next_sibling*
+     Compute the next available sibling signature at the same depth as `sig`.
+
+    Parameters: ~
+        {sig}   (string)
+        {dir?}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.relatives({sig}, {dir?})                           *denote.sequence.relatives*
+     Return relatives of `sig` in `dir`:
+     `{ parent = path|nil, children = path[], siblings = path[], descendants = path[] }`.
+
+    Parameters: ~
+        {sig}   (string)
+        {dir?}  (string)
+
+    Returns: ~
+        ({parent:string|nil,children:string[],siblings:string[],descendants:string[]})
+
+
+M.new_parent({opts?})                               *denote.sequence.new_parent*
+     Create a new top-level sequence note (`denote-sequence-new-parent`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)
+
+
+M.new_child({opts?})                                 *denote.sequence.new_child*
+     Create a child sequence note (`denote-sequence-new-child`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)  & { parent_signature?: string, pick?: boolean }
+
+
+M.new_sibling({opts?})                             *denote.sequence.new_sibling*
+     Create a sibling sequence note (`denote-sequence-new-sibling`).
+
+    Parameters: ~
+        {opts?}  (denote.CreateOpts)  & { sibling_signature?: string, pick?: boolean }
+
+
+M.find({opts?})                                           *denote.sequence.find*
+     Pick and open a sequence note (`denote-sequence-find`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string})
+
+
+M.find_relatives({opts?})                       *denote.sequence.find_relatives*
+     Pick and open a relative (parent, children, siblings, descendants) of the current sequence note
+     (`denote-sequence-find-relatives-dired` / `denote-sequence-find-next-sibling`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string,file?:string})
+
+
+M.link({opts?})                                           *denote.sequence.link*
+     Insert a link to a sequence note (`denote-sequence-link`).
+
+    Parameters: ~
+        {opts?}  ({dir?:string,id_only?:boolean})
+
+
+M.reparent({opts?})                                   *denote.sequence.reparent*
+     Reparent the current note under a chosen parent sequence (`denote-sequence-reparent`).
+
+    Parameters: ~
+        {opts?}  ({file?:string,parent_signature?:string,dir?:string})
+
+
+==============================================================================
+Isolated Denote silos (matching `denote-silo`)                     *denote.silo*
+
+ Allows keeping separate, self-contained Denote note repositories (e.g. work vs personal)
+ configured via `config.opts.silos` or discovered via `.denote.lua` / `.denote.json`
+ directory-local config files (Neovim counterpart of Emacs `.dir-locals.el` silos).
+
+M.list()                                                      *denote.silo.list*
+     Return all configured silos (normalized) plus the primary directory.
+
+    Returns: ~
+        (string[])
+
+
+M.detect({path?})                                           *denote.silo.detect*
+     Walk upward from `path` (default: current buffer path) looking for a `.denote.lua`
+     or `.denote.json` marker file, or checking if `path` is inside one of `config.opts.silos`.
+     Returns the silo root directory and optional local config overrides table.
+
+    Parameters: ~
+        {path?}  (string)
+
+    Returns: ~
+        (string|nil)  dir
+        (table|nil)   local_opts
+
+
+M.with_silo({silo_dir}, {fn})                            *denote.silo.with_silo*
+     Run a function `fn` with `config.active_directory` temporarily bound to `silo_dir`
+     (and any `.denote.json`/`.denote.lua` local overrides applied).
+
+    Parameters: ~
+        {silo_dir}  (string)
+        {fn}        (fun())
+
+    Returns: ~
+        (any)
+
+
+M.switch({silo_dir?})                                       *denote.silo.switch*
+     Switch the active Denote directory for this session.
+
+    Parameters: ~
+        {silo_dir?}  (string)  Pass nil to reset to default `config.opts.directory`
+
+
+M.pick({callback}, {title?})                                  *denote.silo.pick*
+     Pick a silo interactively and invoke `callback(silo_dir)`.
+
+    Parameters: ~
+        {callback}  (fun(silo_dir:string))
+        {title?}    (string)
+
+
+M.create_note({silo_dir?})                             *denote.silo.create_note*
+     Create a note in a chosen silo (`denote-silo-create-note`).
+
+    Parameters: ~
+        {silo_dir?}  (string)
+
+
+M.open_or_create({silo_dir?})                       *denote.silo.open_or_create*
+     Open or create a note in a chosen silo (`denote-silo-open-or-create`).
+
+    Parameters: ~
+        {silo_dir?}  (string)
+
+
+M.explorer({silo_dir?})                                   *denote.silo.explorer*
+     Open the Denote Explorer in a chosen silo (`denote-silo-dired`).
+
+    Parameters: ~
+        {silo_dir?}  (string)
+
+
+vim:tw=78:ts=8:noet:ft=help:norl:

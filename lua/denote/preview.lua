@@ -1,9 +1,10 @@
 ---@mod denote.preview Hover preview of the note behind a `denote:` link
----
+---@brief [[
 --- `:Denote preview` (default buffer-local `K` on a link) opens a floating window with the
 --- target note's title, identifier, keywords, and the first lines of its body (starting at the
 --- linked heading for `denote:ID::#heading` / `::*Heading` links). Press `K` again to focus the
 --- float, `q` / `<Esc>` inside it to close, or `<CR>` to open the note.
+---@brief ]]
 
 local config = require("denote.config")
 local files = require("denote.files")
@@ -53,7 +54,8 @@ end
 --- Build the preview lines for the note at `path`.
 ---@param path string
 ---@param search? string
----@return string[] lines, string filetype
+---@return string[] lines
+---@return string filetype
 function M.build(path, search)
   local all = read_all(path)
   local ft = frontmatter.detect_file_type(path, all)

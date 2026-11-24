@@ -1,10 +1,11 @@
 ---@mod denote.report Vault-wide reports: unlinked mentions, broken links, orphan notes
----
+---@brief [[
 --- - `:Denote unlinked_mentions` lists every line in other notes that mentions the current
 ---   note's title without linking to it (quickfix list). Jump to one and run
 ---   `:Denote link_mention` to turn that mention into a `denote:` link.
 --- - `:Denote check` scans all notes and fills the quickfix list with broken `denote:` links
 ---   and orphan notes (notes no other note links to).
+---@brief ]]
 
 local config = require("denote.config")
 local files = require("denote.files")
