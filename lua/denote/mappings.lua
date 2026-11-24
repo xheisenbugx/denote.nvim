@@ -37,6 +37,7 @@ function M.setup_global()
     { p .. "u", denote.unlinked_mentions, "Unlinked mentions" },
     { p .. "U", denote.link_mention, "Link mention on this line" },
     { p .. "c", denote.check, "Check broken links & orphans" },
+    { p .. "x", denote.capture, "Capture (template)" },
     { p .. "qc", denote.query_contents_link, "Insert query-contents link" },
     { p .. "qf", denote.query_filenames_link, "Insert query-filenames link" },
     { p .. "e", denote.explorer, "Open Denote explorer" },
@@ -46,6 +47,7 @@ function M.setup_global()
     { p .. "K", denote.keywords_remove, "Remove keywords" },
     { p .. "j", denote.journal_new_or_existing_entry, "Today's journal entry" },
     { p .. "J", denote.journal_link_or_create_entry, "Link to today's journal" },
+    { p .. "C", denote.journal_calendar, "Journal calendar" },
     { p .. "zp", denote.sequence_new_parent, "Sequence: new parent" },
     { p .. "zc", denote.sequence_new_child, "Sequence: new child" },
     { p .. "zs", denote.sequence_new_sibling, "Sequence: new sibling" },
@@ -62,7 +64,8 @@ function M.setup_global()
   end
 
   -- Visual mode: create note from region
-  vim.keymap.set("x", p .. "n", ":<C-u>DenoteRegion<CR>", { desc = "Denote: New note from region", silent = true })
+  vim.keymap.set("x", p .. "n", ":DenoteRegion<CR>", { desc = "Denote: New note from region", silent = true })
+  vim.keymap.set("x", p .. "x", ":DenoteCapture<CR>", { desc = "Denote: Capture selection", silent = true })
 
   -- Optional which-key group labels
   if config.opts.integrations and config.opts.integrations.which_key ~= false then
@@ -92,12 +95,13 @@ function M.attach_preview(bufnr)
       require("denote.preview").open()
       return
     end
-    local get_clients = vim.lsp.get_clients or vim.lsp.get_active_clients
-    for _, client in ipairs(get_clients({ bufnr = bufnr })) do
+    for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
       local supports
       if vim.fn.has("nvim-0.11") == 1 then
         supports = client:supports_method("textDocument/hover")
       else
+        -- Neovim 0.10 signature (the type definitions describe the 0.11+ method form)
+        ---@diagnostic disable-next-line: missing-parameter, param-type-mismatch
         supports = client.supports_method("textDocument/hover")
       end
       if supports then
@@ -153,11 +157,8 @@ local decorate_timers = {}
 function M.schedule_decorate(bufnr)
   local uv = vim.uv or vim.loop
   local delay = (config.opts.ui and config.opts.ui.debounce_ms) or 150
-  local timer = decorate_timers[bufnr]
-  if not timer then
-    timer = uv.new_timer()
-    decorate_timers[bufnr] = timer
-  end
+  local timer = decorate_timers[bufnr] or assert(uv.new_timer())
+  decorate_timers[bufnr] = timer
   timer:stop()
   timer:start(
     delay,

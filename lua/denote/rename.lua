@@ -1,5 +1,5 @@
 ---@mod denote.rename Renaming Denote files and syncing front matter
----
+---@brief [[
 --- Supports two-way synchronization between Denote filenames and front matter:
 --- - `rename_file`: rename ANY file (including PDFs, images, non-Denote files) into
 ---   Denote's naming scheme and optionally update/add front matter.
@@ -8,6 +8,7 @@
 --- - `add_front_matter`: prepend Denote front matter to a note lacking it.
 --- - `keywords_add` / `keywords_remove`: quick keyword edits.
 --- - `format_buffer_name` / `statusline`: Denote rename-buffer display formatting.
+---@brief ]]
 
 local config = require("denote.config")
 local files = require("denote.files")
@@ -79,7 +80,9 @@ end
 --- without losing undo history or leaving a stale buffer behind.
 ---@param old_path string
 ---@param new_path string
----@return boolean ok, string|nil err, boolean existed_on_disk
+---@return boolean ok
+---@return string|nil err
+---@return boolean existed_on_disk
 local function rename_on_disk_and_buffer(old_path, new_path)
   local old_norm = utils.normalize(old_path)
   local new_norm = utils.normalize(new_path)
@@ -142,7 +145,8 @@ end
 ---@param updates table
 ---@param add_if_missing? boolean
 ---@param force_save_loaded? boolean
----@return boolean changed, boolean saved_loaded
+---@return boolean changed
+---@return boolean saved_loaded
 local function sync_front_matter(path, updates, add_if_missing, force_save_loaded)
   local ft = frontmatter.detect_file_type(path)
   if not ft then
@@ -187,7 +191,8 @@ end
 
 --- Synchronously rename `file` with the provided component updates and sync front matter.
 ---@param opts denote.RenameOpts
----@return string|nil new_path, string|nil err
+---@return string|nil new_path
+---@return string|nil err
 function M.rename_sync(opts)
   opts = opts or {}
   local path = opts.file
@@ -482,7 +487,8 @@ end
 --- Rename a file on disk using the metadata currently in its front matter
 --- (`denote-rename-file-using-front-matter`).
 ---@param file? string
----@return string|nil new_path, string|nil err
+---@return string|nil new_path
+---@return string|nil err
 function M.rename_file_using_front_matter(file)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then
@@ -520,7 +526,8 @@ end
 
 --- Add Denote front matter to a file that doesn't have one (`denote-add-front-matter`).
 ---@param file? string
----@return boolean, string|nil
+---@return boolean
+---@return string|nil
 function M.add_front_matter(file)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then
@@ -560,7 +567,8 @@ end
 --- Add keywords to `file` (updating filename and front matter) (`denote-keywords-add`).
 ---@param keywords string[]|string|nil Pass nil to prompt interactively
 ---@param file? string
----@return string|nil, string|nil
+---@return string|nil
+---@return string|nil
 function M.keywords_add(keywords, file)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then
@@ -589,7 +597,8 @@ end
 --- Remove keywords from `file` (updating filename and front matter) (`denote-keywords-remove`).
 ---@param keywords string[]|string|nil Pass nil to prompt interactively
 ---@param file? string
----@return string|nil, string|nil
+---@return string|nil
+---@return string|nil
 function M.keywords_remove(keywords, file)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then
@@ -670,7 +679,8 @@ end
 --- Converts e.g. Markdown (YAML/TOML) <-> Org <-> Plain Text without losing metadata or body.
 ---@param file? string
 ---@param new_file_type? string
----@return string|nil new_path, string|nil err
+---@return string|nil new_path
+---@return string|nil err
 function M.change_file_type_and_front_matter(file, new_file_type)
   local path = file or vim.api.nvim_buf_get_name(0)
   if not path or path == "" then

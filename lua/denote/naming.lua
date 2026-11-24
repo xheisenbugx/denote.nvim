@@ -1,10 +1,11 @@
 ---@mod denote.naming Denote file-naming scheme, parser, sluggifier, and identifier generator
----
+---@brief [[
 --- Implements the canonical Emacs Denote file-naming scheme:
 ---   DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION
 --- as well as Denote 3.x/4.x reordered components (`@@DATE` when identifier is not first),
 --- partial Denote filenames, compound extensions (e.g. `.org.gpg`), sluggification,
 --- desluggification, and collision-free identifier generation.
+---@brief ]]
 
 local config = require("denote.config")
 local utils = require("denote.utils")
@@ -23,6 +24,34 @@ local COMPOUND_EXT = {
   gz = true,
 }
 
+--- Remove from `str` every UTF-8 character matched by the character class `pat`.
+--- Lua character classes are byte-based, so multibyte characters listed in a class (such as
+--- `‘’“”`) must be matched as whole characters, never byte by byte: otherwise unrelated
+--- characters sharing a byte (e.g. `—`, `€`) would be mangled into invalid UTF-8.
+---@param str string
+---@param pat string Lua pattern, typically a `[...]` character class
+---@return string
+local function strip_chars(str, pat)
+  return (
+    str:gsub("[%z\1-\127\194-\244][\128-\191]*", function(c)
+      if #c == 1 then
+        return c:find(pat) and "" or nil
+      end
+      return pat:find(c, 1, true) and "" or nil
+    end)
+  )
+end
+
+--- Lowercase `str` like Emacs `downcase` (Unicode-aware outside fast event contexts).
+---@param str string
+---@return string
+local function downcase(str)
+  if vim.in_fast_event() then
+    return str:lower()
+  end
+  return vim.fn.tolower(str)
+end
+
 --- Remove excluded punctuation from `str`.
 ---@param str string
 ---@return string
@@ -31,7 +60,7 @@ function M.remove_punctuation(str)
   if not pat or pat == "" then
     return str
   end
-  return (str:gsub(pat, ""))
+  return strip_chars(str, pat)
 end
 
 --- Sluggify a title string into kebab-case (matching `denote-sluggify-title`).
@@ -48,7 +77,7 @@ function M.sluggify_title(str)
   local s = vim.trim(str)
   s = M.remove_punctuation(s)
   if not config.opts.preserve_case then
-    s = s:lower()
+    s = downcase(s)
   end
   -- Convert whitespace and underscores to hyphens, collapse consecutive hyphens
   s = s:gsub("[%s_]+", "-")
@@ -70,9 +99,9 @@ function M.sluggify_signature(str)
   end
   local s = vim.trim(str)
   -- Preserve `=` while removing other punctuation
-  s = s:gsub("[%[%]{}!@#$%%^&*()+%-'\"?,%.|;:~`‘’“”/\\<>]", "")
+  s = strip_chars(s, "[%[%]{}!@#$%%^&*()+%-'\"?,%.|;:~`‘’“”/\\<>]")
   if not config.opts.preserve_case then
-    s = s:lower()
+    s = downcase(s)
   end
   s = s:gsub("[%s_]+", "=")
   s = s:gsub("=+", "=")
@@ -95,7 +124,7 @@ function M.sluggify_keyword(str)
   local s = vim.trim(str)
   s = M.remove_punctuation(s)
   if not config.opts.preserve_case then
-    s = s:lower()
+    s = downcase(s)
   end
   s = s:gsub("[%s_%-]+", "")
   return s
@@ -117,7 +146,7 @@ function M.sluggify_keywords(keywords)
 end
 
 --- General sluggify dispatcher (`component` is "title", "signature", or "keyword").
----@param component "title"|"signature"|"keyword"
+---@param component 'title'|'signature'|'keyword'
 ---@param str string
 ---@return string
 function M.sluggify(component, str)
@@ -132,7 +161,7 @@ function M.sluggify(component, str)
 end
 
 --- Convert a slug back into a human-readable string (matching `denote-desluggify`).
----@param component "title"|"signature"|"keyword"
+---@param component 'title'|'signature'|'keyword'
 ---@param str string
 ---@return string
 function M.desluggify(component, str)
@@ -153,7 +182,8 @@ end
 
 --- Split a basename into stem and extension (handling compound extensions like `.org.gpg`).
 ---@param basename string
----@return string stem, string extension
+---@return string stem
+---@return string extension
 function M.split_extension(basename)
   if not basename or basename == "" then
     return "", ""
@@ -270,7 +300,13 @@ function M.parse_filename(path)
         result.signature = v
       end
     elseif d == "--" then
-      if v ~= "" then
+      -- `--` only delimits the title (Emacs `denote-title-regexp` stops at `==`, `__`, `@@`
+      -- and the extension), so a `--` directly following the title is part of the title itself.
+      if result.title then
+        if tokens[idx - 1].delim == "--" then
+          result.title = result.title .. "--" .. v
+        end
+      elseif v ~= "" then
         result.title = v
       end
     elseif d == "__" then
@@ -327,7 +363,19 @@ function M.format_filename(opts)
     ext = "." .. ext
   end
 
-  local order = config.opts.file_name_components_order or { "identifier", "signature", "title", "keywords" }
+  -- Like Emacs `(seq-union denote-file-name-components-order '(identifier signature title keywords))`:
+  -- components missing from a partial order are appended in the canonical order.
+  local order = {}
+  for _, comp in ipairs(config.opts.file_name_components_order or {}) do
+    if not vim.tbl_contains(order, comp) then
+      order[#order + 1] = comp
+    end
+  end
+  for _, comp in ipairs({ "identifier", "signature", "title", "keywords" }) do
+    if not vim.tbl_contains(order, comp) then
+      order[#order + 1] = comp
+    end
+  end
   local parts = {}
 
   for _, comp in ipairs(order) do
@@ -357,7 +405,7 @@ function M.format_identifier(ts)
 end
 
 --- Parse a Denote identifier (`YYYYMMDDTHHMMSS`) back into a Unix timestamp.
----@param id string
+---@param id string|nil
 ---@return integer|nil
 function M.identifier_to_time(id)
   if not id then
@@ -368,12 +416,12 @@ function M.identifier_to_time(id)
     return nil
   end
   return os.time({
-    year = tonumber(y),
-    month = tonumber(m),
-    day = tonumber(d),
-    hour = tonumber(H),
-    min = tonumber(Mi),
-    sec = tonumber(S),
+    year = tonumber(y) --[[@as integer]],
+    month = tonumber(m) --[[@as integer]],
+    day = tonumber(d) --[[@as integer]],
+    hour = tonumber(H) --[[@as integer]],
+    min = tonumber(Mi) --[[@as integer]],
+    sec = tonumber(S) --[[@as integer]],
   })
 end
 

@@ -1,11 +1,12 @@
 ---@mod denote.frontmatter Front matter generation, parsing, and in-place rewriting
----
+---@brief [[
 --- Supports all four canonical Emacs Denote file types:
 --- - `org` (`.org`): `#+title:`, `#+date:`, `#+filetags:`, `#+identifier:`, `#+signature:`
 --- - `markdown-yaml` (`.md`): YAML front matter delimited by `---`
 --- - `markdown-toml` (`.md`): TOML front matter delimited by `+++`
 --- - `text` (`.txt`): plain text key/value header terminated by `---------------------------`
 --- Plus user-defined custom file types in `config.opts.file_types`.
+---@brief ]]
 
 local config = require("denote.config")
 local naming = require("denote.naming")
@@ -41,7 +42,8 @@ end
 
 --- Return the file type spec for `file_type` (defaults to `config.opts.file_type`).
 ---@param file_type? string
----@return table, string
+---@return table
+---@return string
 function M.get_spec(file_type)
   local ft = file_type or config.opts.file_type or "markdown-yaml"
   local all = M.file_types()
@@ -192,9 +194,11 @@ end
 function M.format(meta)
   local spec, ft = M.get_spec(meta.file_type)
   local title = meta.title or ""
-  local ts = type(meta.date) == "number" and meta.date
+  local ts = (
+    type(meta.date) == "number" and meta.date
     or (meta.identifier and naming.identifier_to_time(meta.identifier))
     or os.time()
+  ) --[[@as integer]]
   local date_str = type(meta.date) == "string" and meta.date or M.format_date(ts, ft)
   local kws = naming.sluggify_keywords(meta.keywords or {})
   local id = meta.identifier or naming.format_identifier(ts)
@@ -589,7 +593,8 @@ end
 ---@param file_type string
 ---@param updates { title?: string, keywords?: string[], signature?: string, identifier?: string, date?: integer|string }
 ---@param opts? { add_if_missing?: boolean }
----@return string[] new_lines, boolean changed
+---@return string[] new_lines
+---@return boolean changed
 function M.rewrite_lines(lines, file_type, updates, opts)
   opts = opts or {}
   local fm = M.parse_lines(lines, file_type)

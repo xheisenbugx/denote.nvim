@@ -1,5 +1,5 @@
 ---@mod denote.sequence Folgezettel / hierarchical sequence notes (matching `denote-sequence`)
----
+---@brief [[
 --- Supports both sequence schemes from Emacs `denote-sequence`:
 --- - `"numeric"`:      `1`, `2`, `1=1`, `1=2`, `1=1=1`
 --- - `"alphanumeric"`: `1`, `2`, `1a`, `1b`, `1a1`, `1a2`, `1a1a`
@@ -8,6 +8,7 @@
 --- - `new_parent`, `new_child`, `new_sibling`
 --- - `relatives` / `find_relatives` (parent, children, siblings, all)
 --- - `find` / `link` / `reparent`
+---@brief ]]
 
 local config = require("denote.config")
 local create = require("denote.create")
@@ -23,7 +24,7 @@ local utils = require("denote.utils")
 local M = {}
 
 --- Return the active sequence scheme ("numeric" or "alphanumeric").
----@return "numeric"|"alphanumeric"
+---@return 'numeric'|'alphanumeric'
 function M.scheme()
   local s = config.opts.sequence and config.opts.sequence.scheme or "numeric"
   return s == "alphanumeric" and "alphanumeric" or "numeric"
@@ -33,7 +34,7 @@ end
 --- Numeric: `"1=2=1"` -> `{ "1", "2", "1" }`
 --- Alphanumeric: `"1a2b"` -> `{ "1", "a", "2", "b" }`
 ---@param sig string
----@param scheme? "numeric"|"alphanumeric"
+---@param scheme? 'numeric'|'alphanumeric'
 ---@return string[]
 function M.split(sig, scheme)
   if not sig or sig == "" then
@@ -63,7 +64,7 @@ end
 
 --- Join sequence segments back into a signature string.
 ---@param parts string[]
----@param scheme? "numeric"|"alphanumeric"
+---@param scheme? 'numeric'|'alphanumeric'
 ---@return string
 function M.join(parts, scheme)
   scheme = scheme or M.scheme()
@@ -75,7 +76,7 @@ end
 
 --- Check whether `sig` is a valid sequence signature under `scheme`.
 ---@param sig string|nil
----@param scheme? "numeric"|"alphanumeric"
+---@param scheme? 'numeric'|'alphanumeric'
 ---@return boolean
 function M.is_valid(sig, scheme)
   if not sig or sig == "" then
@@ -107,7 +108,7 @@ end
 
 --- Return the parent signature of `sig`, or nil if `sig` is top-level.
 ---@param sig string
----@param scheme? "numeric"|"alphanumeric"
+---@param scheme? 'numeric'|'alphanumeric'
 ---@return string|nil
 function M.parent_of(sig, scheme)
   local parts = M.split(sig, scheme)
@@ -309,10 +310,15 @@ local function with_base_signature(opts, title, callback)
   })
 end
 
+---@class denote.SequenceCreateOpts: denote.CreateOpts
+---@field parent_signature? string Parent sequence for `new_child` (prompted when absent)
+---@field sibling_signature? string Sibling sequence for `new_sibling` (prompted when absent)
+---@field pick? boolean Always pick the base note with a picker
+
 --- Create a child sequence note (`denote-sequence-new-child`).
----@param opts? denote.CreateOpts & { parent_signature?: string, pick?: boolean }
+---@param opts? denote.SequenceCreateOpts
 function M.new_child(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
   with_base_signature(
     { signature = opts.parent_signature, pick = opts.pick, dir = opts.dir },
     "Parent Sequence Note",
@@ -324,9 +330,9 @@ function M.new_child(opts)
 end
 
 --- Create a sibling sequence note (`denote-sequence-new-sibling`).
----@param opts? denote.CreateOpts & { sibling_signature?: string, pick?: boolean }
+---@param opts? denote.SequenceCreateOpts
 function M.new_sibling(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
   with_base_signature(
     { signature = opts.sibling_signature, pick = opts.pick, dir = opts.dir },
     "Sibling Sequence Note",
@@ -372,6 +378,7 @@ function M.find_relatives(opts)
     utils.warn("Current file does not have a valid sequence signature")
     return
   end
+  ---@cast sig string
   local rel = M.relatives(sig, opts.dir)
   local items = {}
   local function add(label, p)

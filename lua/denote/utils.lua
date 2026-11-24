@@ -121,6 +121,25 @@ function M.write_lines(path, lines)
   return M.write_file(path, table.concat(lines, "\n") .. "\n")
 end
 
+--- Highlight `line` (0-based) from byte `col_start` to `col_end` (-1 = end of line) with
+--- `group`. Extmark-based replacement for the deprecated `nvim_buf_add_highlight`.
+---@param bufnr integer
+---@param ns integer
+---@param group string
+---@param line integer
+---@param col_start integer
+---@param col_end integer
+function M.add_highlight(bufnr, ns, group, line, col_start, col_end)
+  local opts = { hl_group = group, strict = false }
+  if col_end == -1 then
+    opts.end_row = line + 1
+    opts.end_col = 0
+  else
+    opts.end_col = col_end
+  end
+  pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, line, col_start, opts)
+end
+
 --- Find an existing loaded buffer for `path` (normalized).
 ---@param path string
 ---@return integer|nil
@@ -265,7 +284,7 @@ function M.parse_date(input)
     elseif unit == "w" then
       return now + n * 7 * 86400, nil
     elseif unit == "m" then
-      local t = os.date("*t", now)
+      local t = os.date("*t", now) --[[@as osdate]]
       t.month = t.month + n
       return os.time(t), nil
     end
@@ -275,12 +294,12 @@ function M.parse_date(input)
   local y, m, d, H, Mi, S = s:match("^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)(%d%d)$")
   if y then
     return os.time({
-      year = tonumber(y),
-      month = tonumber(m),
-      day = tonumber(d),
-      hour = tonumber(H),
-      min = tonumber(Mi),
-      sec = tonumber(S),
+      year = tonumber(y) --[[@as integer]],
+      month = tonumber(m) --[[@as integer]],
+      day = tonumber(d) --[[@as integer]],
+      hour = tonumber(H) --[[@as integer]],
+      min = tonumber(Mi) --[[@as integer]],
+      sec = tonumber(S) --[[@as integer]],
     }),
       nil
   end
@@ -289,12 +308,12 @@ function M.parse_date(input)
   y, m, d, H, Mi, S = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)[T%s](%d%d):(%d%d):(%d%d)")
   if y then
     return os.time({
-      year = tonumber(y),
-      month = tonumber(m),
-      day = tonumber(d),
-      hour = tonumber(H),
-      min = tonumber(Mi),
-      sec = tonumber(S),
+      year = tonumber(y) --[[@as integer]],
+      month = tonumber(m) --[[@as integer]],
+      day = tonumber(d) --[[@as integer]],
+      hour = tonumber(H) --[[@as integer]],
+      min = tonumber(Mi) --[[@as integer]],
+      sec = tonumber(S) --[[@as integer]],
     }),
       nil
   end
@@ -302,11 +321,11 @@ function M.parse_date(input)
   y, m, d, H, Mi = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)[T%s](%d%d):(%d%d)")
   if y then
     return os.time({
-      year = tonumber(y),
-      month = tonumber(m),
-      day = tonumber(d),
-      hour = tonumber(H),
-      min = tonumber(Mi),
+      year = tonumber(y) --[[@as integer]],
+      month = tonumber(m) --[[@as integer]],
+      day = tonumber(d) --[[@as integer]],
+      hour = tonumber(H) --[[@as integer]],
+      min = tonumber(Mi) --[[@as integer]],
       sec = 0,
     }),
       nil
@@ -314,11 +333,11 @@ function M.parse_date(input)
 
   y, m, d = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
   if y then
-    local cur = os.date("*t", now)
+    local cur = os.date("*t", now) --[[@as osdate]]
     return os.time({
-      year = tonumber(y),
-      month = tonumber(m),
-      day = tonumber(d),
+      year = tonumber(y) --[[@as integer]],
+      month = tonumber(m) --[[@as integer]],
+      day = tonumber(d) --[[@as integer]],
       hour = cur.hour,
       min = cur.min,
       sec = cur.sec,
@@ -333,7 +352,7 @@ end
 ---@param ts integer
 ---@return string
 function M.tz_offset(ts)
-  local raw = os.date("%z", ts) or "+0000"
+  local raw = tostring(os.date("%z", ts) or "+0000")
   if #raw == 5 then
     return raw:sub(1, 3) .. ":" .. raw:sub(4, 5)
   end

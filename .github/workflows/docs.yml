@@ -1,0 +1,57 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "lua/**"
+      - "doc/**"
+      - "Makefile"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+env:
+  # vimcats v1.2.0 (needed for `---@nodoc`) is not on crates.io yet, so it is built from the tag.
+  VIMCATS_VERSION: v1.2.0
+
+jobs:
+  api-doc:
+    name: doc/denote-api.txt is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Cache vimcats
+        id: cache-vimcats
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/vimcats
+          key: vimcats-${{ env.VIMCATS_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install vimcats
+        if: steps.cache-vimcats.outputs.cache-hit != 'true'
+        run: >-
+          cargo install vimcats
+          --git https://github.com/mrcjkb/vimcats
+          --tag "$VIMCATS_VERSION"
+          --features cli
+          --locked
+          --root ~/.local/vimcats
+
+      - name: Generate docs
+        run: make docs VIMCATS="$HOME/.local/vimcats/bin/vimcats"
+
+      - name: Check that committed docs are current
+        run: |
+          if ! git diff --exit-code -- doc/; then
+            echo "::error::doc/ is out of date. Run 'make docs' and commit the result."
+            exit 1
+          fi

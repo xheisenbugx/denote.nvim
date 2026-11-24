@@ -106,7 +106,9 @@ local function scan(root)
       local full = current .. "/" .. name
       if typ == "link" or typ == nil or typ == "unknown" then
         local st = uv.fs_stat(full)
-        typ = st and st.type or typ
+        if st and st.type then
+          typ = st.type
+        end
       end
       if typ == "directory" then
         if not is_excluded_dir(name) then
@@ -227,7 +229,7 @@ function M.list(opts)
     if include and text_only and not entry.text[full] then
       include = false
     end
-    local rel = (include and need_rel) and utils.relpath(full, root) or nil
+    local rel = (include and need_rel) and utils.relpath(full, root) or ""
     if include and extra_dirs and rel_dir_excluded(rel, extra_dirs) then
       include = false
     end

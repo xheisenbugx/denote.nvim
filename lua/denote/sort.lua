@@ -29,10 +29,14 @@ local function signature_tokens(sig)
       i = i + 1
     elseif ch:match("%d") then
       local s, e = sig:find("^%d+", i)
+      ---@cast s integer
+      ---@cast e integer
       tokens[#tokens + 1] = tonumber(sig:sub(s, e))
       i = e + 1
     else
       local s, e = sig:find("^[^%d=%-%.]+", i)
+      ---@cast s integer
+      ---@cast e integer
       tokens[#tokens + 1] = sig:sub(s, e):lower()
       i = e + 1
     end

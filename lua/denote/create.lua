@@ -26,12 +26,21 @@ local M = {}
 ---@field prompts? string[] Override prompt sequence for interactive creation
 ---@field interactive? boolean When false, create synchronously without prompting
 ---@field on_created? fun(path: string, meta: table) Callback after note is created
+---@field body_template? string Body with capture escapes (`%^{Prompt}`, `%i`, `%a`, `%?`, ...)
+---@field context? denote.CaptureContext Capture context for template escapes (origin, region, answers)
+---@field _initial_title? string Internal: default text for the title prompt
+---@field _silo_dir? string Internal: create the note inside this silo
 
---- Resolve a template entry into a string.
+---@class denote.RegionOpts: denote.CreateOpts
+---@field line1? integer First line of the region (default: `'<`)
+---@field line2? integer Last line of the region (default: `'>`)
+
+--- Resolve a template entry into a string (string templates get capture escapes expanded).
 ---@param template_name? string
 ---@param meta table
----@return string
-local function resolve_template(template_name, meta)
+---@param ctx denote.CaptureContext
+---@return string text, integer|nil cursor
+local function resolve_template(template_name, meta, ctx)
   if not template_name or template_name == "" then
     return ""
   end
@@ -39,7 +48,7 @@ local function resolve_template(template_name, meta)
   if type(tmpl) == "function" then
     return tostring(tmpl(meta) or "")
   elseif type(tmpl) == "string" then
-    return tmpl
+    return require("denote.capture").expand_sync(tmpl, ctx)
   end
   return ""
 end
@@ -96,25 +105,36 @@ function M.create_sync(opts)
     date = ts,
   }
 
-  local fm = frontmatter.format(meta)
-  local tmpl_body = resolve_template(opts.template, meta)
-  local extra_body = opts.body or ""
-  local content = fm
-  if tmpl_body ~= "" then
-    content = content .. tmpl_body
-    if content:sub(-1) ~= "\n" then
-      content = content .. "\n"
+  local capture = require("denote.capture")
+  local ctx = opts.context or {}
+  ctx.origin = ctx.origin or capture.origin()
+  ctx.syntax, ctx.target_dir, ctx.date = capture.syntax_for(ft), target_dir, ctx.date or ts
+
+  -- Body parts: named template, capture body template, then literal body (blank line between).
+  local parts = { { resolve_template(opts.template, meta, ctx) } }
+  if opts.body_template then
+    parts[#parts + 1] = { capture.expand_sync(opts.body_template, ctx) }
+  end
+  parts[#parts + 1] = { opts.body or "" }
+  local content, cursor_abs, used = frontmatter.format(meta), nil, 0
+  for _, part in ipairs(parts) do
+    if part[1] ~= "" then
+      if used > 0 and content:sub(-2) ~= "\n\n" then
+        content = content .. "\n"
+      end
+      if part[2] and not cursor_abs then
+        cursor_abs = #content + part[2]
+      end
+      content = content .. part[1]
+      if content:sub(-1) ~= "\n" then
+        content = content .. "\n"
+      end
+      used = used + 1
+    elseif part[2] and not cursor_abs then
+      cursor_abs = #content + 1
     end
   end
-  if extra_body ~= "" then
-    if tmpl_body ~= "" and content:sub(-2) ~= "\n\n" then
-      content = content .. "\n"
-    end
-    content = content .. extra_body
-    if content:sub(-1) ~= "\n" then
-      content = content .. "\n"
-    end
-  end
+  content = capture.finalize(content, cursor_abs)
 
   local should_open = opts.open ~= false
   local should_save = opts.save
@@ -140,9 +160,12 @@ function M.create_sync(opts)
       end
       vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     end
-    -- Move cursor to end of file, ready to type
+    -- Move cursor to `%?` (or the end of file), ready to type
     local line_count = vim.api.nvim_buf_line_count(bufnr)
-    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+    local pos = cursor_abs and capture.offset_to_pos(content, cursor_abs) or { line_count, 0 }
+    pos[1] = math.min(pos[1], line_count)
+    meta.cursor = pos
+    pcall(vim.api.nvim_win_set_cursor, 0, pos)
     if not should_save then
       -- Also write if user requested save_buffer_after_creation
       if config.opts.save_buffer_after_creation then
@@ -349,15 +372,32 @@ end
 ---@param opts? denote.CreateOpts
 ---@return table|nil
 function M.note(opts)
-  opts = opts or {}
+  opts = vim.tbl_extend("force", {}, opts or {})
+  opts.context = opts.context or { origin = require("denote.capture").origin() }
   local silo_dir = opts._silo_dir
-  local function finish(collected)
+  local function create(collected)
     if silo_dir then
       return require("denote.silo").with_silo(silo_dir, function()
         return M.create_sync(collected)
       end)
     end
     return M.create_sync(collected)
+  end
+  -- Ask the `%^{Prompt}` escapes of the body templates before creating the note.
+  local function finish(collected)
+    if collected.interactive == false then
+      return create(collected)
+    end
+    local ctx = collected.context
+    ctx.answers = ctx.answers or {}
+    local named = (config.opts.templates or {})[collected.template or ""]
+    return require("denote.capture").ask(
+      { type(named) == "string" and named or nil, collected.body_template },
+      ctx.answers,
+      function()
+        return create(collected)
+      end
+    )
   end
 
   if opts.interactive == false or (opts.title ~= nil and opts.keywords ~= nil and not opts.prompts) then
@@ -424,7 +464,7 @@ end
 
 --- Open an existing Denote note, or create a new one if no match is selected
 --- (`denote-open-or-create`).
----@param opts? { dir?: string, prompts?: string[] }
+---@param opts? denote.CreateOpts
 function M.open_or_create(opts)
   opts = opts or {}
   local root = config.directory(opts.dir)
@@ -443,7 +483,7 @@ function M.open_or_create(opts)
       if chosen[1] then
         utils.open_file(chosen[1].value, how)
       else
-        local create_opts = vim.deepcopy(opts)
+        local create_opts = vim.deepcopy(opts) --[[@as denote.CreateOpts]]
         if query and vim.trim(query) ~= "" then
           create_opts._initial_title = vim.trim(query)
         end
@@ -491,9 +531,9 @@ end
 --- Create a new Denote note containing the current visual selection (`denote-region`).
 --- If invoked from a code buffer, wraps the region in an Org `#+begin_src <lang>` or
 --- Markdown fenced code block matching the target note's syntax.
----@param opts? denote.CreateOpts & { line1?: integer, line2?: integer }
+---@param opts? denote.RegionOpts
 function M.region(opts)
-  opts = vim.deepcopy(opts or {})
+  opts = vim.deepcopy(opts or {}) --[[@as denote.RegionOpts]]
   local bufnr = vim.api.nvim_get_current_buf()
   local src_ft = vim.bo[bufnr].filetype
   local line1 = opts.line1 or vim.fn.line("'<")
@@ -518,6 +558,7 @@ function M.region(opts)
   else
     opts.body = raw_text .. "\n"
   end
+  opts.context = opts.context or { region = raw_text, origin = require("denote.capture").origin(bufnr) }
 
   return M.note(opts)
 end

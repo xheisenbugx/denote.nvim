@@ -1,8 +1,9 @@
 ---@mod denote.explorer Interactive Denote Explorer (Dired / Menu / Sort-Dired buffer)
----
+---@brief [[
 --- Combines Emacs `denote-dired-mode`, `denote-sort-dired`, and `denote-menu` into
 --- an idiomatic, colorized Neovim buffer with filtering, sorting, marking, and
 --- single or batch renaming.
+---@brief ]]
 
 local config = require("denote.config")
 local create = require("denote.create")
@@ -161,7 +162,7 @@ function M.open(opts)
 
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     for _, h in ipairs(hls) do
-      pcall(vim.api.nvim_buf_add_highlight, buf, ns, h[4], h[1], h[2], h[3])
+      utils.add_highlight(buf, ns, h[4], h[1], h[2], h[3])
     end
 
     if has_win then

@@ -1,10 +1,11 @@
 ---@mod denote.backlinks Backlinks discovery and interactive backlinks buffer
----
+---@brief [[
 --- Mirrors Emacs `denote-backlinks` and `denote-find-backlink`:
 --- - Finds every note in the Denote directory referencing the current note's identifier.
 --- - Works with zero external dependencies (pure Lua scanner) and accelerates with `rg` when available.
 --- - Opens an interactive split buffer showing file headers + matching context lines
 ---   with `<CR>` to jump, `o` other window, `f` toggle context/filenames-only, `r` refresh, `q` close.
+---@brief ]]
 
 local config = require("denote.config")
 local files = require("denote.files")
@@ -339,7 +340,7 @@ function M.open(opts)
 
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     for _, h in ipairs(hls) do
-      pcall(vim.api.nvim_buf_add_highlight, buf, ns, h[4], h[1], h[2], h[3])
+      utils.add_highlight(buf, ns, h[4], h[1], h[2], h[3])
     end
   end
 
