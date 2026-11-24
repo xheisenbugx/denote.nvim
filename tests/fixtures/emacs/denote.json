@@ -1,7 +1,7 @@
 {
   "generator": "scripts/emacs-fixtures/generate.el",
   "denote_version": "4.3.1",
-  "tz": "Asia/Kolkata",
+  "tz": "IST-5:30",
   "notes": [
     {
       "name": "basic",

@@ -28,8 +28,10 @@
 
 ;;;; Determinism
 
-(defconst denote-fixtures-tz "Asia/Kolkata"
-  "Time zone used for every date (non-zero, non-whole-hour offset: +05:30).")
+(defconst denote-fixtures-tz "IST-5:30"
+  "Time zone used for every date (non-zero, non-whole-hour offset: +05:30).
+A POSIX TZ string (India has no DST) rather than \"Asia/Kolkata\" so that the
+parity spec works on systems without tzdata.")
 
 (setenv "TZ" denote-fixtures-tz)
 (set-time-zone-rule denote-fixtures-tz)

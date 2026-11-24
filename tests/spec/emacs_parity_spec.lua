@@ -117,8 +117,18 @@ local function write_file(path, data)
 end
 
 -- All dates in the fixtures are rendered in a fixed time zone.
+-- Changing $TZ is not enough on glibc: LuaJIT's os.date uses localtime_r(), which does not
+-- re-read $TZ (mktime() behind os.time does), so call tzset() explicitly after every change.
+local ffi = require("ffi")
+pcall(ffi.cdef, "void tzset(void);")
+local function set_tz(tz)
+  vim.env.TZ = tz
+  pcall(function()
+    ffi.C.tzset()
+  end)
+end
 local saved_tz = vim.env.TZ
-vim.env.TZ = fixtures.tz
+set_tz(fixtures.tz)
 
 describe("Emacs Denote " .. fixtures.denote_version .. " golden fixtures", function()
   it("fixture file is populated", function()
@@ -297,5 +307,5 @@ describe("Emacs Denote " .. fixtures.denote_version .. " golden fixtures", funct
   end)
 end)
 
-vim.env.TZ = saved_tz
+set_tz(saved_tz)
 denote.setup({ mappings = { enabled = false } })

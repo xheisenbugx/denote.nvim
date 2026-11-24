@@ -95,8 +95,7 @@ function M.attach_preview(bufnr)
       require("denote.preview").open()
       return
     end
-    local get_clients = vim.lsp.get_clients or vim.lsp.get_active_clients
-    for _, client in ipairs(get_clients({ bufnr = bufnr })) do
+    for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
       local supports
       if vim.fn.has("nvim-0.11") == 1 then
         supports = client:supports_method("textDocument/hover")
