@@ -12,7 +12,9 @@ local M = {}
 ---@class denote.JournalConfig
 ---@field directory? string|nil Directory for journal entries (nil -> <directory>/journal or <directory>)
 ---@field keyword string Keyword tag added to journal entries
----@field title_format string os.date format for journal note titles (e.g. "%A %e %B %Y")
+---@field title_format? string|table<string, string>|nil os.date format for titles; nil -> per-interval default, a table maps interval -> format
+---@field interval? "daily"|"weekly"|"monthly"|"yearly" How often a new journal entry is created (default: "daily")
+---@field week_start? integer First day of the week for "weekly" and the calendar: 1 = Monday (ISO, default), 0 = Sunday
 ---@field file_type? string|nil Override default file_type for journal entries
 ---@field template? string|nil Template name for journal entries
 
@@ -142,7 +144,12 @@ M.defaults = {
   journal = {
     directory = nil,
     keyword = "journal",
-    title_format = "%A %e %B %Y",
+    --- nil -> per-interval default ("%A %e %B %Y", "Week %V %G", "%B %Y", "%Y")
+    title_format = nil,
+    --- "daily" | "weekly" | "monthly" | "yearly" (`denote-journal-interval`)
+    interval = "daily",
+    --- 1 = Monday (ISO 8601 weeks), 0 = Sunday
+    week_start = 1,
     file_type = nil,
     template = nil,
   },
