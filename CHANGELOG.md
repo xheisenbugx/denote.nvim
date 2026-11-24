@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The project uses
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/); do not edit them by hand.
 
+## 0.1.0 (2026-11-24)
+
+
+### Features
+
+* capture templates with Org-capture style escapes ([c3fe6fb](https://github.com/xheisenbugx/denote.nvim/commit/c3fe6fb6306166ab691186cf8e0f959d3cdad49b))
+* journal intervals & calendar, capture templates, Emacs parity fixtures, type check, API docs, release automation ([6948699](https://github.com/xheisenbugx/denote.nvim/commit/694869965e2fb52e57080f66b6a8eefb17f149ff))
+* **journal:** journal intervals and calendar view ([bd30afd](https://github.com/xheisenbugx/denote.nvim/commit/bd30afd5b623159c85732838d6721a5f725c960d))
+
+
+### Bug Fixes
+
+* **ci:** make Emacs parity spec timezone-safe on Linux; drop deprecated LSP API ([b948a90](https://github.com/xheisenbugx/denote.nvim/commit/b948a908a9bf62f06b4a08f255fb043e22155529))
+
 ## [Pre-release] - development before v0.1.0
 
 Changes made before release automation was set up. All of them ship in v0.1.0.
