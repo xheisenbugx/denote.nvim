@@ -1,10 +1,11 @@
 ---@mod denote.naming Denote file-naming scheme, parser, sluggifier, and identifier generator
----
+---@brief [[
 --- Implements the canonical Emacs Denote file-naming scheme:
 ---   DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION
 --- as well as Denote 3.x/4.x reordered components (`@@DATE` when identifier is not first),
 --- partial Denote filenames, compound extensions (e.g. `.org.gpg`), sluggification,
 --- desluggification, and collision-free identifier generation.
+---@brief ]]
 
 local config = require("denote.config")
 local utils = require("denote.utils")
@@ -145,7 +146,7 @@ function M.sluggify_keywords(keywords)
 end
 
 --- General sluggify dispatcher (`component` is "title", "signature", or "keyword").
----@param component "title"|"signature"|"keyword"
+---@param component 'title'|'signature'|'keyword'
 ---@param str string
 ---@return string
 function M.sluggify(component, str)
@@ -160,7 +161,7 @@ function M.sluggify(component, str)
 end
 
 --- Convert a slug back into a human-readable string (matching `denote-desluggify`).
----@param component "title"|"signature"|"keyword"
+---@param component 'title'|'signature'|'keyword'
 ---@param str string
 ---@return string
 function M.desluggify(component, str)
@@ -181,7 +182,8 @@ end
 
 --- Split a basename into stem and extension (handling compound extensions like `.org.gpg`).
 ---@param basename string
----@return string stem, string extension
+---@return string stem
+---@return string extension
 function M.split_extension(basename)
   if not basename or basename == "" then
     return "", ""

@@ -1,8 +1,9 @@
 ---@mod denote.explorer Interactive Denote Explorer (Dired / Menu / Sort-Dired buffer)
----
+---@brief [[
 --- Combines Emacs `denote-dired-mode`, `denote-sort-dired`, and `denote-menu` into
 --- an idiomatic, colorized Neovim buffer with filtering, sorting, marking, and
 --- single or batch renaming.
+---@brief ]]
 
 local config = require("denote.config")
 local create = require("denote.create")

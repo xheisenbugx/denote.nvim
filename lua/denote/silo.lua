@@ -1,8 +1,9 @@
 ---@mod denote.silo Isolated Denote silos (matching `denote-silo`)
----
+---@brief [[
 --- Allows keeping separate, self-contained Denote note repositories (e.g. work vs personal)
 --- configured via `config.opts.silos` or discovered via `.denote.lua` / `.denote.json`
 --- directory-local config files (Neovim counterpart of Emacs `.dir-locals.el` silos).
+---@brief ]]
 
 local config = require("denote.config")
 local utils = require("denote.utils")
@@ -29,7 +30,8 @@ end
 --- or `.denote.json` marker file, or checking if `path` is inside one of `config.opts.silos`.
 --- Returns the silo root directory and optional local config overrides table.
 ---@param path? string
----@return string|nil dir, table|nil local_opts
+---@return string|nil dir
+---@return table|nil local_opts
 function M.detect(path)
   local target = path
   if not target or target == "" then

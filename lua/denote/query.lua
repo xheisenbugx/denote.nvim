@@ -1,5 +1,5 @@
 ---@mod denote.query Full-text grep and Denote 4.0 query links
----
+---@brief [[
 --- Implements:
 --- - `grep(query, opts)`: fast full-text search across Denote notes (uses `rg` if installed,
 ---   with pure-Lua fallback so it works with zero external binaries).
@@ -8,6 +8,7 @@
 ---   `r` refresh, `q` close.
 --- - `query_contents_link` (`denote-query-contents-link`): inserts `denote:query-contents:...`
 --- - `query_filenames_link` (`denote-query-filenames-link`): inserts `denote:query-filenames:...`
+---@brief ]]
 
 local config = require("denote.config")
 local files = require("denote.files")

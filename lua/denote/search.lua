@@ -1,5 +1,5 @@
 ---@mod denote.search Shared full-text search engine (ripgrep with pure-Lua fallback)
----
+---@brief [[
 --- Every content search in denote.nvim (grep, query links, backlinks, unlinked mentions)
 --- goes through `M.run`, so results are consistent no matter which backend runs:
 ---
@@ -14,6 +14,7 @@
 ---   `| ( ) + ? {n}` as operators, so common patterns behave the same.
 ---
 --- Pass a callback to run asynchronously (UI never blocks); omit it to get results directly.
+---@brief ]]
 
 local config = require("denote.config")
 local utils = require("denote.utils")
@@ -30,7 +31,7 @@ local M = {}
 ---@field pattern string Regex (or literal string with `fixed = true`)
 ---@field files string[] Candidate files (only matches inside these are returned)
 ---@field fixed? boolean Treat `pattern` as a literal string
----@field case? "smart"|"sensitive"|"insensitive" Default "smart"
+---@field case? 'smart'|'sensitive'|'insensitive' Default "smart"
 ---@field root? string Directory to hand to `rg` when there are many candidates
 
 local rg_available
