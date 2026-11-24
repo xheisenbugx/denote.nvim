@@ -14,6 +14,8 @@ local files = require("denote.files")
 local frontmatter = require("denote.frontmatter")
 local links = require("denote.links")
 local naming = require("denote.naming")
+local pickers = require("denote.pickers")
+local sort = require("denote.sort")
 local utils = require("denote.utils")
 
 local M = {}
@@ -24,10 +26,10 @@ local M = {}
 ---@field col integer
 ---@field text string
 
---- Search contents of Denote text files in `dir` matching `query`.
---- Uses pure Lua (or `rg` when available and no custom Lua-only options are needed).
+--- Search contents of Denote text files in `dir` (or explicit `opts.files`) matching `query`.
+--- Uses `rg` when available with a pure-Lua fallback so it works with zero external binaries.
 ---@param query string
----@param opts? { dir?: string, file_regexp?: string, case_sensitive?: boolean }
+---@param opts? { dir?: string, files?: string[], file_regexp?: string, case_sensitive?: boolean }
 ---@return denote.GrepMatch[]
 function M.search_contents(query, opts)
   opts = opts or {}
@@ -35,12 +37,13 @@ function M.search_contents(query, opts)
     return {}
   end
   local root = config.directory(opts.dir)
-  local candidates = files.list({
-    dir = root,
-    denote_only = true,
-    text_only = true,
-    regexp = opts.file_regexp,
-  })
+  local candidates = opts.files
+    or files.list({
+      dir = root,
+      denote_only = true,
+      text_only = true,
+      regexp = opts.file_regexp,
+    })
   if #candidates == 0 then
     return {}
   end
@@ -48,7 +51,7 @@ function M.search_contents(query, opts)
   local matches = {}
 
   -- Fast path with ripgrep when available and searching all notes in root
-  if not opts.file_regexp and vim.fn.executable("rg") == 1 then
+  if not opts.file_regexp and not opts.files and vim.fn.executable("rg") == 1 then
     local cmd = {
       "rg",
       "--vimgrep",
@@ -125,18 +128,31 @@ end
 local ns = vim.api.nvim_create_namespace("denote_query")
 
 --- Open the interactive Denote grep / query results buffer (`denote-grep`).
+--- Supports all Denote 4.3.1 query refinement commands:
+---   f: include files matching regexp (`denote-query-only-include-files`)
+---   x: exclude files matching regexp (`denote-query-exclude-files`)
+---   k: include files with keyword(s) (`denote-query-only-include-files-with-keywords`)
+---   K: exclude files with keyword(s) (`denote-query-exclude-files-with-keywords`)
+---   /: focus search — grep new query only in currently matched files (`denote-query-focus-last-search`)
+---   S: sort matched files by component (`denote-query-sort-last-search`)
+---   c: clear all filters (`denote-query-clear-all-filters`)
 ---@param query? string
----@param opts? { dir?: string, file_regexp?: string }
+---@param opts? { dir?: string, files?: string[], file_regexp?: string }
 function M.grep(query, opts)
   opts = opts or {}
   local function open_results(q)
     if not q or vim.trim(q) == "" then
       return
     end
-    q = vim.trim(q)
-    local all_matches = M.search_contents(q, opts)
+    local current_query = vim.trim(q)
+    local scoped_files = opts.files
+    local all_matches = M.search_contents(current_query, opts)
     local include_filters = {}
     local exclude_filters = {}
+    local include_keywords = {}
+    local exclude_keywords = {}
+    local sort_by = nil
+    local reverse_sort = false
     local line_targets = {}
 
     local buf = vim.api.nvim_create_buf(false, true)
@@ -144,13 +160,14 @@ function M.grep(query, opts)
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].swapfile = false
     vim.bo[buf].filetype = "denote-query"
-    pcall(vim.api.nvim_buf_set_name, buf, "denote://query/" .. q)
+    pcall(vim.api.nvim_buf_set_name, buf, "denote://query/" .. current_query)
 
     local function filtered_matches()
       local out = {}
       for _, m in ipairs(all_matches) do
         local keep = true
         local hay = m.file .. " " .. m.text
+        local parsed = naming.parse_filename(m.file)
         for _, f in ipairs(include_filters) do
           if not utils.matches_pattern(hay, f) then
             keep = false
@@ -165,8 +182,35 @@ function M.grep(query, opts)
             end
           end
         end
+        if keep and #include_keywords > 0 then
+          for _, kw in ipairs(include_keywords) do
+            if not vim.tbl_contains(parsed.keywords or {}, kw) then
+              keep = false
+              break
+            end
+          end
+        end
+        if keep and #exclude_keywords > 0 then
+          for _, kw in ipairs(exclude_keywords) do
+            if vim.tbl_contains(parsed.keywords or {}, kw) then
+              keep = false
+              break
+            end
+          end
+        end
         if keep then
           out[#out + 1] = m
+        end
+      end
+      return out
+    end
+
+    local function current_file_list()
+      local seen, out = {}, {}
+      for _, m in ipairs(filtered_matches()) do
+        if not seen[m.file] then
+          seen[m.file] = true
+          out[#out + 1] = m.file
         end
       end
       return out
@@ -184,9 +228,23 @@ function M.grep(query, opts)
       if #exclude_filters > 0 then
         filter_info = filter_info .. "  -[" .. table.concat(exclude_filters, ", ") .. "]"
       end
+      if #include_keywords > 0 then
+        filter_info = filter_info .. "  +kw:[" .. table.concat(include_keywords, ",") .. "]"
+      end
+      if #exclude_keywords > 0 then
+        filter_info = filter_info .. "  -kw:[" .. table.concat(exclude_keywords, ",") .. "]"
+      end
+      if sort_by then
+        filter_info = filter_info .. "  sort:" .. sort_by .. (reverse_sort and "↓" or "↑")
+      end
 
-      lines[1] =
-        string.format("Denote Query: %q  [%d match%s]%s  (g? help)", q, #shown, #shown == 1 and "" or "es", filter_info)
+      lines[1] = string.format(
+        "Denote Query: %q  [%d match%s]%s  (g? help)",
+        current_query,
+        #shown,
+        #shown == 1 and "" or "es",
+        filter_info
+      )
       hls[#hls + 1] = { 0, 0, -1, "DenoteBacklinksHeader" }
       lines[2] = string.rep("─", 60)
       hls[#hls + 1] = { 1, 0, -1, "DenoteDelimiter" }
@@ -202,6 +260,9 @@ function M.grep(query, opts)
             order[#order + 1] = m.file
           end
           grouped[m.file][#grouped[m.file] + 1] = m
+        end
+        if sort_by then
+          order = sort.sort_files(order, sort_by, reverse_sort)
         end
 
         for _, f in ipairs(order) do
@@ -282,13 +343,75 @@ function M.grep(query, opts)
         end
       end)
     end, "exclude matching lines")
+    map("k", function()
+      vim.ui.input({ prompt = "Only include files with keywords: " }, function(input)
+        if input and vim.trim(input) ~= "" then
+          for _, kw in ipairs(naming.sluggify_keywords(input)) do
+            include_keywords[#include_keywords + 1] = kw
+          end
+          render()
+        end
+      end)
+    end, "only include files with keywords")
+    map("K", function()
+      vim.ui.input({ prompt = "Exclude files with keywords: " }, function(input)
+        if input and vim.trim(input) ~= "" then
+          for _, kw in ipairs(naming.sluggify_keywords(input)) do
+            exclude_keywords[#exclude_keywords + 1] = kw
+          end
+          render()
+        end
+      end)
+    end, "exclude files with keywords")
+    map("/", function()
+      local matched_files = current_file_list()
+      if #matched_files == 0 then
+        utils.notify("No files in current query to focus on")
+        return
+      end
+      vim.ui.input({ prompt = string.format("Focus search in %d matched file(s): ", #matched_files) }, function(nq)
+        if nq and vim.trim(nq) ~= "" then
+          current_query = vim.trim(nq)
+          scoped_files = matched_files
+          all_matches = M.search_contents(current_query, { dir = opts.dir, files = scoped_files })
+          include_filters, exclude_filters, include_keywords, exclude_keywords = {}, {}, {}, {}
+          render()
+        end
+      end)
+    end, "focus search in matched files")
+    map("S", function()
+      local items = {}
+      for _, comp in ipairs(sort.COMPONENTS) do
+        items[#items + 1] = { display = { { comp, "DenoteTitle" } }, text = comp, value = comp }
+      end
+      pickers.pick({
+        title = "Sort Query Results By",
+        items = items,
+        preview = false,
+        on_choice = function(chosen)
+          if chosen[1] then
+            sort_by = chosen[1].value
+            reverse_sort = (sort_by == "identifier" or sort_by == "last-modified")
+            render()
+          end
+        end,
+      })
+    end, "sort matched files")
     map("c", function()
       include_filters = {}
       exclude_filters = {}
+      include_keywords = {}
+      exclude_keywords = {}
+      scoped_files = opts.files
+      all_matches = M.search_contents(current_query, opts)
       render()
-    end, "clear filters")
+    end, "clear all filters")
     map("r", function()
-      all_matches = M.search_contents(q, opts)
+      all_matches = M.search_contents(current_query, {
+        dir = opts.dir,
+        files = scoped_files,
+        file_regexp = opts.file_regexp,
+      })
       render()
     end, "refresh results")
     map("q", "<Cmd>bwipeout<CR>", "close query results")
@@ -296,11 +419,12 @@ function M.grep(query, opts)
       require("denote.ui").show_help("Denote Query Results", {
         { "<CR> / o", "Jump to match in other window" },
         { "v / s", "Open in vertical / horizontal split" },
-        { "f", "Filter (keep matches matching pattern)" },
-        { "x", "Exclude matches matching pattern" },
+        { "f / x", "Include / exclude matches by regexp" },
+        { "k / K", "Include / exclude files by keyword" },
+        { "/", "Focus search: new grep within matched files" },
+        { "S", "Sort matched files by component" },
         { "c", "Clear all active filters" },
-        { "r", "Re-run search" },
-        { "q", "Close query buffer" },
+        { "r / q", "Refresh / close query buffer" },
       })
     end, "help")
 
@@ -318,6 +442,38 @@ function M.grep(query, opts)
   end)
 end
 
+--- Search `query` only inside Denote files referenced between `line1` and `line2`
+--- (`denote-grep-files-referenced-in-region`).
+---@param query? string
+---@param opts? { line1?: integer, line2?: integer, bufnr?: integer }
+function M.grep_files_referenced_in_region(query, opts)
+  opts = opts or {}
+  local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
+  local line1 = opts.line1 or vim.fn.line("'<")
+  local line2 = opts.line2 or vim.fn.line("'>")
+  if line1 > line2 then
+    line1, line2 = line2, line1
+  end
+  local lines = vim.api.nvim_buf_get_lines(bufnr, math.max(0, line1 - 1), line2, false)
+  local seen, ref_files = {}, {}
+  for _, line in ipairs(lines) do
+    for id in line:gmatch(naming.ID_PATTERN) do
+      if not seen[id] then
+        seen[id] = true
+        local path = files.find_by_id(id)
+        if path then
+          ref_files[#ref_files + 1] = path
+        end
+      end
+    end
+  end
+  if #ref_files == 0 then
+    utils.notify("No Denote identifiers referenced in selected region")
+    return nil
+  end
+  return M.grep(query, { files = ref_files })
+end
+
 --- Insert a `query-contents` link at cursor (`denote-query-contents-link`).
 ---@param query? string
 ---@param description? string
@@ -326,12 +482,7 @@ function M.query_contents_link(query, description)
   local syntax = links.buffer_syntax(bufnr)
   local function insert(q, desc)
     local text = links.format_link("query-contents:" .. q, desc or q, { syntax = syntax })
-    local pos = vim.api.nvim_win_get_cursor(0)
-    local row, col = pos[1] - 1, pos[2]
-    local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
-    local ins = math.min(col, #line)
-    vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { line:sub(1, ins) .. text .. line:sub(ins + 1) })
-    vim.api.nvim_win_set_cursor(0, { row + 1, ins + #text })
+    links.insert_text(text, bufnr)
   end
 
   if query then
@@ -358,12 +509,7 @@ function M.query_filenames_link(query, description)
   local syntax = links.buffer_syntax(bufnr)
   local function insert(q, desc)
     local text = links.format_link("query-filenames:" .. q, desc or q, { syntax = syntax })
-    local pos = vim.api.nvim_win_get_cursor(0)
-    local row, col = pos[1] - 1, pos[2]
-    local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
-    local ins = math.min(col, #line)
-    vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { line:sub(1, ins) .. text .. line:sub(ins + 1) })
-    vim.api.nvim_win_set_cursor(0, { row + 1, ins + #text })
+    links.insert_text(text, bufnr)
   end
 
   if query then

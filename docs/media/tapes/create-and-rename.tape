@@ -38,6 +38,7 @@ Hide
 Ctrl+G
 Type@5ms `Cap <leader>nR sync filename from front matter` Enter
 Show
+Type "0"
 Type " nR"
 Sleep 2.2s
 

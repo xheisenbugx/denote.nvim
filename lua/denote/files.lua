@@ -206,10 +206,13 @@ function M.keywords(dir)
     end
   end
   if config.opts.infer_keywords ~= false then
+    local exclude_pat = config.opts.keywords_to_not_infer_pattern
     for _, path in ipairs(M.list({ dir = dir, denote_only = true })) do
       local parsed = naming.parse_filename(path)
       for _, kw in ipairs(parsed.keywords) do
-        list[#list + 1] = kw
+        if not (exclude_pat and exclude_pat ~= "" and utils.matches_pattern(kw, exclude_pat)) then
+          list[#list + 1] = kw
+        end
       end
     end
   end

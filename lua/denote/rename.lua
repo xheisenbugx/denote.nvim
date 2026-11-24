@@ -227,6 +227,20 @@ function M.rename_sync(opts)
     end
   end
 
+  local hook = config.opts.after_rename_file_hook
+  local event_data =
+    { old_path = path, new_path = new_path, identifier = id, title = title, keywords = keywords, signature = signature }
+  if type(hook) == "function" then
+    pcall(hook, new_path, path, event_data)
+  elseif type(hook) == "table" then
+    for _, fn in ipairs(hook) do
+      if type(fn) == "function" then
+        pcall(fn, new_path, path, event_data)
+      end
+    end
+  end
+  pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "DenoteRenameFile", data = event_data })
+
   return new_path, nil
 end
 
@@ -520,13 +534,177 @@ function M.keywords_remove(keywords, file)
   end)
 end
 
+--- Interactively change the identifier directly (`denote-rename-file-identifier`).
+---@param file? string
+function M.rename_file_identifier(file)
+  local path = file or vim.api.nvim_buf_get_name(0)
+  if path == "" then
+    utils.warn("Current buffer has no file name")
+    return
+  end
+  local parsed = naming.parse_filename(path)
+  vim.ui.input({
+    prompt = "New identifier (YYYYMMDDTHHMMSS): ",
+    default = parsed.identifier or naming.format_identifier(),
+  }, function(input)
+    if input == nil or vim.trim(input) == "" then
+      return
+    end
+    local id = vim.trim(input)
+    if not id:match("^" .. naming.ID_PATTERN .. "$") then
+      utils.error("Invalid Denote identifier (expected YYYYMMDDTHHMMSS): " .. id)
+      return
+    end
+    local new_path, err = M.rename_sync({ file = path, identifier = id })
+    if err then
+      utils.error(err)
+    elseif new_path then
+      utils.notify("Renamed to " .. vim.fn.fnamemodify(new_path, ":t"))
+    end
+  end)
+end
+
+--- Change the file type (extension) and rewrite front matter into the new format
+--- (`denote-change-file-type-and-front-matter`).
+--- Converts e.g. Markdown (YAML/TOML) <-> Org <-> Plain Text without losing metadata or body.
+---@param file? string
+---@param new_file_type? string
+---@return string|nil new_path, string|nil err
+function M.change_file_type_and_front_matter(file, new_file_type)
+  local path = file or vim.api.nvim_buf_get_name(0)
+  if not path or path == "" then
+    return nil, "Current buffer has no file name"
+  end
+  path = utils.normalize(path)
+
+  local function apply(target_ft)
+    local _, ft = frontmatter.get_spec(target_ft)
+    local new_ext = frontmatter.extension_for(ft)
+    local parsed = naming.parse_filename(path)
+    local bufnr = utils.find_buffer(path)
+    local lines
+    if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
+      lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    else
+      lines = utils.read_lines(path)
+    end
+
+    local old_ft = frontmatter.detect_file_type(path, lines)
+    local old_fm = old_ft and frontmatter.parse_lines(lines, old_ft) or nil
+    local body_lines = frontmatter.strip_front_matter(lines, old_ft)
+
+    local dir = vim.fn.fnamemodify(path, ":h")
+    local id = (old_fm and old_fm.identifier and old_fm.identifier:match("^" .. naming.ID_PATTERN .. "$"))
+        and old_fm.identifier
+      or parsed.identifier
+      or naming.unique_identifier(os.time(), files.identifier_set(dir))
+    local title = (old_fm and old_fm.title and old_fm.title ~= "") and old_fm.title
+      or (parsed.title and naming.desluggify("title", parsed.title))
+      or naming.split_extension(parsed.filename)
+    local keywords = (old_fm and old_fm.keywords) or parsed.keywords or {}
+    local signature = (old_fm and old_fm.signature and old_fm.signature ~= "") and old_fm.signature
+      or (parsed.signature or "")
+    local ts = naming.identifier_to_time(id) or os.time()
+
+    local new_name = naming.format_filename({
+      identifier = id,
+      signature = signature,
+      title = title,
+      keywords = keywords,
+      extension = new_ext,
+      sluggify = true,
+    })
+    local new_path = dir .. "/" .. new_name
+
+    if new_path ~= path then
+      local ok_mv, mv_err = rename_on_disk_and_buffer(path, new_path)
+      if not ok_mv then
+        return nil, mv_err
+      end
+    end
+
+    local new_fm = frontmatter.format({
+      title = title,
+      date = ts,
+      keywords = keywords,
+      identifier = id,
+      signature = signature,
+      file_type = ft,
+    })
+    local fm_lines = vim.split(new_fm, "\n", { plain = true })
+    if #fm_lines > 0 and fm_lines[#fm_lines] == "" then
+      table.remove(fm_lines)
+    end
+    local final_lines = vim.list_extend(fm_lines, body_lines)
+
+    local target_buf = utils.find_buffer(new_path)
+    if target_buf and vim.api.nvim_buf_is_loaded(target_buf) then
+      vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, final_lines)
+      utils.write_lines(new_path, final_lines)
+      vim.bo[target_buf].modified = false
+      -- Re-detect Neovim filetype for the new extension
+      pcall(vim.api.nvim_buf_call, target_buf, function()
+        vim.cmd("filetype detect")
+      end)
+    else
+      utils.write_lines(new_path, final_lines)
+    end
+
+    return new_path, nil
+  end
+
+  if new_file_type then
+    return apply(new_file_type)
+  end
+
+  local types = vim.tbl_keys(frontmatter.file_types())
+  table.sort(types)
+  local items = {}
+  for _, ft in ipairs(types) do
+    local ext = frontmatter.extension_for(ft)
+    items[#items + 1] = {
+      display = { { ft, "DenoteTitle" }, { " (" .. ext .. ")", "DenoteExtension" } },
+      text = ft .. " " .. ext,
+      value = ft,
+    }
+  end
+  require("denote.pickers").pick({
+    title = "Change File Type & Front Matter",
+    items = items,
+    preview = false,
+    on_choice = function(chosen)
+      if chosen[1] then
+        local np, err = apply(chosen[1].value)
+        if err then
+          utils.error(err)
+        elseif np then
+          utils.notify("Converted to " .. vim.fn.fnamemodify(np, ":t"))
+        end
+      end
+    end,
+  })
+end
+
 --- Format a human-friendly buffer label (matching `denote-rename-buffer-format`).
---- Tokens: `%t` title, `%i` identifier, `%s` signature, `%k` keywords, `%d` date (YYYY-MM-DD).
+--- Specifiers:
+---   %t  front matter title (or filename title)
+---   %T  filename title (desluggified)
+---   %i  identifier (`YYYYMMDDTHHMMSS`)
+---   %I  human date from identifier (`Mon, 23 Nov 2026`)
+---   %d  identifier (DATE mnemonic, same as %i)
+---   %D  DWIM: %t if non-empty, else %I, else %i (upstream default)
+---   %s  signature
+---   %k  keywords
+---   %b  backlinks indicator (`rename_buffer_backlinks_indicator`) if note has backlinks
+---   %%  literal `%`
 ---@param bufnr? integer
 ---@param fmt? string
 ---@return string
 function M.format_buffer_name(bufnr, fmt)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].buftype ~= "" then
+    return ""
+  end
   local path = vim.api.nvim_buf_get_name(bufnr)
   if path == "" then
     return ""
@@ -535,20 +713,41 @@ function M.format_buffer_name(bufnr, fmt)
   if not parsed.is_denote then
     return ""
   end
-  local title = frontmatter.extract_title(path)
+  local fm_title = frontmatter.extract_title(path)
+  local file_title = parsed.title and naming.desluggify("title", parsed.title) or ""
   local ts = naming.identifier_to_time(parsed.identifier)
-  local date_str = ts and tostring(os.date("%Y-%m-%d", ts)) or ""
-  local template = fmt or config.opts.rename_buffer_format or "%t"
-  local map = {
-    t = title,
-    i = parsed.identifier or "",
-    s = parsed.signature or "",
-    k = table.concat(parsed.keywords or {}, ","),
-    d = date_str,
-  }
-  return (template:gsub("%%([tiskd])", function(c)
-    return map[c] or ""
-  end))
+  local human_date = ts and tostring(os.date("%a, %d %b %Y", ts)) or ""
+  local dwim = (fm_title ~= "" and fm_title) or (human_date ~= "" and human_date) or (parsed.identifier or "")
+  local template = fmt or config.opts.rename_buffer_format or "%D"
+
+  local rendered = (
+    template:gsub("%%([tTiIdDskb%%])", function(c)
+      if c == "%" then
+        return "%"
+      elseif c == "t" then
+        return fm_title
+      elseif c == "T" then
+        return file_title
+      elseif c == "i" or c == "d" then
+        return parsed.identifier or ""
+      elseif c == "I" then
+        return human_date
+      elseif c == "D" then
+        return dwim
+      elseif c == "s" then
+        return parsed.signature or ""
+      elseif c == "k" then
+        return table.concat(parsed.keywords or {}, ",")
+      elseif c == "b" then
+        local bl = require("denote.backlinks").find(parsed.identifier, { exclude_file = path })
+        return #bl > 0 and (config.opts.rename_buffer_backlinks_indicator or " <-->") or ""
+      end
+      return ""
+    end)
+  )
+
+  local prefix = config.opts.buffer_name_prefix or ""
+  return prefix .. rendered
 end
 
 return M

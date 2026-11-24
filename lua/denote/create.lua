@@ -24,6 +24,7 @@ local M = {}
 ---@field how? string Window open mode ("edit", "split", "vsplit", "tab")
 ---@field save? boolean Override `save_buffer_after_creation`
 ---@field prompts? string[] Override prompt sequence for interactive creation
+---@field interactive? boolean When false, create synchronously without prompting
 ---@field on_created? fun(path: string, meta: table) Callback after note is created
 
 --- Resolve a template entry into a string.
@@ -153,6 +154,18 @@ function M.create_sync(opts)
   if opts.on_created then
     opts.on_created(path, meta)
   end
+
+  local hook = config.opts.after_new_note_hook
+  if type(hook) == "function" then
+    pcall(hook, path, meta)
+  elseif type(hook) == "table" then
+    for _, fn in ipairs(hook) do
+      if type(fn) == "function" then
+        pcall(fn, path, meta)
+      end
+    end
+  end
+  pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "DenoteNewNote", data = meta })
 
   return meta
 end
@@ -417,6 +430,40 @@ function M.open_or_create(opts)
         create_opts.how = how
         M.note(create_opts)
       end
+    end,
+  })
+end
+
+--- Open an existing note or choose which creation command to run (`denote-open-or-create-with-command`).
+---@param opts? { dir?: string }
+function M.open_or_create_with_command(opts)
+  opts = opts or {}
+  local commands = {
+    { display = { { "note (default)", "DenoteTitle" } }, text = "note", value = "note" },
+    { display = { { "type (choose file type)", "DenoteTitle" } }, text = "type", value = "type" },
+    { display = { { "date (custom date)", "DenoteTitle" } }, text = "date", value = "date" },
+    { display = { { "subdirectory", "DenoteTitle" } }, text = "subdirectory", value = "subdirectory" },
+    { display = { { "template", "DenoteTitle" } }, text = "template", value = "template" },
+    { display = { { "signature", "DenoteTitle" } }, text = "signature", value = "signature" },
+  }
+  pickers.pick({
+    title = "Select Note Creation Command",
+    items = commands,
+    preview = false,
+    on_choice = function(chosen)
+      if not chosen[1] then
+        return
+      end
+      local cmd = chosen[1].value
+      local prompt_map = {
+        note = config.opts.prompts or { "title", "keywords" },
+        type = { "file_type", "title", "keywords" },
+        date = { "date", "title", "keywords" },
+        subdirectory = { "subdirectory", "title", "keywords" },
+        template = { "template", "title", "keywords" },
+        signature = { "signature", "title", "keywords" },
+      }
+      M.open_or_create(vim.tbl_extend("force", opts, { prompts = prompt_map[cmd] }))
     end,
   })
 end

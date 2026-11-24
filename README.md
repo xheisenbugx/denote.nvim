@@ -223,6 +223,11 @@ Every action is available via `:Denote <subcommand>` (with tab completion) and d
 | `<leader>ne` | `:Denote explorer` | `denote-sort-dired` / `denote-menu` | Open the interactive Denote Explorer buffer |
 | `<leader>nr` | `:Denote rename` | `denote-rename-file` | Rename any file & sync its front matter |
 | `<leader>nR` | `:Denote rename_from_front_matter` | `denote-rename-file-using-front-matter` | Sync filename on disk from edited front matter |
+| — | `:Denote change_file_type` | `denote-change-file-type-and-front-matter` | Convert note + front matter between Org, Markdown (YAML/TOML) & text |
+| — | `:Denote rename_identifier` | `denote-rename-file-identifier` | Change a file's unique timestamp identifier |
+| — | `:Denote link_to_file_with_contents` | `denote-link-to-file-with-contents` | Link to a note whose contents match a query |
+| — | `:Denote link_to_all_files_with_contents` | `denote-link-to-all-files-with-contents` | Insert links to all notes matching a content query |
+| — | `:DenoteGrepRegion` | `denote-grep-files-referenced-in-region` | Grep only inside notes referenced in visual selection |
 | `<leader>nk` | `:Denote keywords_add` | `denote-keywords-add` | Add keyword(s) to current file |
 | `<leader>nK` | `:Denote keywords_remove` | `denote-keywords-remove` | Remove keyword(s) from current file |
 | `<leader>nj` | `:Denote journal` | `denote-journal-new-or-existing-entry` | Open or create today's journal entry |

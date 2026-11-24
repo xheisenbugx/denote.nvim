@@ -85,6 +85,7 @@ Four built-in file types are supported (plus custom entries in `file_types`):
   Creation:
     `note [title]`              Create a new note
     `open` / `open_or_create`   Open an existing note or create a new one
+    `open_with_command`         Open or create choosing creation command
     `type`                      Create a note choosing file type
     `date`                      Create a note with a custom date
     `subdirectory`              Create a note in a subdirectory
@@ -96,18 +97,23 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `link`                      Insert a link to an existing note
     `link_id_only`              Insert an identifier-only link
     `link_or_create`            Link to existing note or create & link
+    `link_or_create_with_command` Link or create choosing creation command
     `link_after_creating`       Create a new note and link to it
     `link_to_heading`           Link directly to an Org or Markdown heading
+    `link_to_file_with_contents` Link to a note whose contents match a query
+    `link_to_all_files_with_contents` Insert links to all notes matching content
     `add_links [regexp]`        Insert a list of links matching regexp
     `follow`                    Follow the `denote:` link under the cursor
     `find_link`                 Pick an outbound link in the current buffer
     `backlinks`                 Open the interactive backlinks split buffer
-    `find_backlink`             Jump to a backlink via fuzzy picker
+    `find_backlink`             Jump to a backlinking file via fuzzy picker
+    `find_backlink_with_location` Jump directly to a backlink line via picker
     `convert_to_file_links`     Convert `denote:` links to relative file links
     `convert_to_denote_links`   Convert relative file links to `denote:` links
 
   Search & Explorer:
     `grep [query]`              Full-text search across Denote notes
+    `:DenoteGrepRegion [query]` Grep only inside notes referenced in selection
     `query_contents_link [q]`   Insert a live `denote:query-contents:` link
     `query_filenames_link [q]`  Insert a live `denote:query-filenames:` link
     `explorer [regexp]`         Open the interactive Denote explorer buffer
@@ -119,7 +125,9 @@ Four built-in file types are supported (plus custom entries in `file_types`):
     `rename_keywords`           Rename only the keywords
     `rename_signature`          Rename only the signature
     `rename_date`               Change the date / identifier
+    `rename_identifier`         Directly change the timestamp identifier
     `rename_from_front_matter`  Sync filename on disk from front matter
+    `change_file_type [type]`   Convert note + front matter to another file type
     `add_front_matter`          Add front matter to a file lacking it
     `keywords_add [kws...]`     Add keyword(s) to current file
     `keywords_remove [kws...]`  Remove keyword(s) from current file

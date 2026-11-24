@@ -20,6 +20,9 @@ local function subcommands()
     open_or_create = function()
       d.open_or_create()
     end,
+    open_with_command = function()
+      d.open_or_create_with_command()
+    end,
     type = function()
       d.type()
     end,
@@ -44,11 +47,20 @@ local function subcommands()
     link_or_create = function()
       d.link_or_create()
     end,
+    link_or_create_with_command = function()
+      d.link_or_create_with_command()
+    end,
     link_after_creating = function()
       d.link_after_creating()
     end,
     link_to_heading = function()
       d.link_to_heading()
+    end,
+    link_to_file_with_contents = function(args)
+      d.link_to_file_with_contents(#args > 0 and table.concat(args, " ") or nil)
+    end,
+    link_to_all_files_with_contents = function(args)
+      d.link_to_all_files_with_contents(#args > 0 and table.concat(args, " ") or nil)
     end,
     add_links = function(args)
       d.add_links(#args > 0 and table.concat(args, " ") or nil)
@@ -64,6 +76,9 @@ local function subcommands()
     end,
     find_backlink = function()
       d.find_backlink()
+    end,
+    find_backlink_with_location = function()
+      d.find_backlink_with_location()
     end,
     grep = function(args)
       d.grep(#args > 0 and table.concat(args, " ") or nil)
@@ -95,8 +110,14 @@ local function subcommands()
     rename_date = function()
       d.rename_file_date()
     end,
+    rename_identifier = function()
+      d.rename_file_identifier()
+    end,
     rename_from_front_matter = function()
       d.rename_file_using_front_matter()
+    end,
+    change_file_type = function(args)
+      d.change_file_type_and_front_matter(nil, #args > 0 and args[1] or nil)
     end,
     add_front_matter = function()
       d.add_front_matter()
@@ -217,6 +238,17 @@ function M.register()
   end, {
     range = true,
     desc = "Create a Denote note from the selected region",
+  })
+
+  vim.api.nvim_create_user_command("DenoteGrepRegion", function(cmd_opts)
+    require("denote").grep_files_referenced_in_region(
+      cmd_opts.args ~= "" and cmd_opts.args or nil,
+      { line1 = cmd_opts.line1, line2 = cmd_opts.line2 }
+    )
+  end, {
+    range = true,
+    nargs = "?",
+    desc = "Grep inside Denote files referenced in the selected region",
   })
 end
 

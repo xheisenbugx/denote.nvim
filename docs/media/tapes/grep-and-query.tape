@@ -36,7 +36,7 @@ Type "q"
 Sleep 500ms
 
 Type "Go" Escape
-Type "oLive search: " Escape
+Type "iLive search: " Escape
 Sleep 300ms
 
 Hide

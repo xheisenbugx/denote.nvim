@@ -13,7 +13,7 @@ local naming = require("denote.naming")
 
 local M = {}
 
-M.COMPONENTS = { "identifier", "title", "keywords", "signature", "mtime" }
+M.COMPONENTS = { "identifier", "title", "keywords", "signature", "last-modified", "random" }
 
 --- Split a signature string into comparable tokens (numbers as integers, letters as strings)
 --- so that Folgezettel sequences sort naturally (`1`, `1=1`, `1=2`, `1=10`, `1a`, `1a1`, `1b`, `2`).
@@ -76,14 +76,25 @@ end
 --- Sort a list of file paths by `component`.
 --- Returns a new sorted list (does not mutate input).
 ---@param paths string[]
----@param component? "identifier"|"title"|"keywords"|"signature"|"mtime"
+---@param component? "identifier"|"title"|"keywords"|"signature"|"last-modified"|"mtime"|"random"
 ---@param reverse? boolean
 ---@return string[]
 function M.sort_files(paths, component, reverse)
   component = component or "identifier"
-  -- Accept Emacs alias "keyword" for "keywords"
+  -- Accept Emacs aliases
   if component == "keyword" then
     component = "keywords"
+  elseif component == "mtime" then
+    component = "last-modified"
+  end
+
+  if component == "random" then
+    local out = vim.deepcopy(paths)
+    for i = #out, 2, -1 do
+      local j = math.random(i)
+      out[i], out[j] = out[j], out[i]
+    end
+    return out
   end
 
   local entries = {}
@@ -92,7 +103,7 @@ function M.sort_files(paths, component, reverse)
     entries[i] = {
       path = path,
       parsed = p,
-      mtime = component == "mtime" and files.mtime(path) or 0,
+      mtime = component == "last-modified" and files.mtime(path) or 0,
     }
   end
 
@@ -116,7 +127,7 @@ function M.sort_files(paths, component, reverse)
       end
     elseif component == "signature" then
       cmp = M.compare_signatures(a.parsed.signature or "", b.parsed.signature or "")
-    elseif component == "mtime" then
+    elseif component == "last-modified" then
       if a.mtime ~= b.mtime then
         cmp = a.mtime < b.mtime and -1 or 1
       end

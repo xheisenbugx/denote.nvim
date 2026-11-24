@@ -332,7 +332,7 @@ function M.format_filename(opts)
 
   for _, comp in ipairs(order) do
     if comp == "identifier" and id ~= "" then
-      if #parts == 0 then
+      if #parts == 0 and not config.opts.identifier_delimiter_always_present then
         parts[#parts + 1] = id
       else
         parts[#parts + 1] = "@@" .. id

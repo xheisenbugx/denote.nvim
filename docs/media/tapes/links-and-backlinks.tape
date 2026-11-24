@@ -9,7 +9,7 @@ Show
 Sleep 1s
 
 Type "Go" Escape
-Type "oSee heading: " Escape
+Type "iSee heading: " Escape
 Sleep 300ms
 
 Hide

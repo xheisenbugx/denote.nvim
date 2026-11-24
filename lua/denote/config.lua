@@ -40,6 +40,9 @@ M.defaults = {
   --- Automatically collect keywords from existing Denote files in the active directory.
   infer_keywords = true,
 
+  --- Pattern (Lua/Vim regex) of keywords to exclude when inferring keywords (Denote 4.2.0).
+  keywords_to_not_infer_pattern = nil,
+
   --- Sort keywords alphabetically in filenames and front matter.
   sort_keywords = true,
 
@@ -50,6 +53,9 @@ M.defaults = {
   --- Order of filename components.
   --- When "identifier" is not first, Denote prefixes it with "@@" per Denote 3.x/4.x spec.
   file_name_components_order = { "identifier", "signature", "title", "keywords" },
+
+  --- Always include `@@` before the identifier even when it is first (Denote 4.1.0).
+  identifier_delimiter_always_present = false,
 
   --- Regexps (Lua patterns) of directories/files to exclude from Denote scans.
   excluded_directories_patterns = { "^%.git$", "^node_modules$", "^%.obsidian$", "^%.trash$", "^ltximg$" },
@@ -83,7 +89,20 @@ M.defaults = {
   auto_rename_on_save = false,
 
   --- Rename buffer display metadata (accessible via `denote.statusline()`).
-  rename_buffer_format = "%t",
+  --- Specifiers (matching Emacs Denote): %t title, %T filename title, %i/%d identifier,
+  --- %I formatted date, %D DWIM (title -> date -> id), %s signature, %k keywords,
+  --- %b backlinks indicator, %% literal %.
+  rename_buffer_format = "%D",
+
+  --- Indicator inserted by `%b` in `rename_buffer_format` when a note has backlinks.
+  rename_buffer_backlinks_indicator = " <-->",
+
+  --- Optional prefix prepended to formatted buffer names (e.g. "[D] ").
+  buffer_name_prefix = "",
+
+  --- Default sort component & direction in the Denote Explorer (`denote-sort-dired`).
+  sort_dired_default_sort_component = "identifier",
+  sort_dired_default_reverse_sort = true,
 
   --- Link format style for Markdown files:
   --- "denote" -> [Description](denote:ID) (canonical Denote)
@@ -91,8 +110,20 @@ M.defaults = {
   --- "relative" -> [Description](relative-filename.md)
   markdown_link_style = "denote",
 
-  --- Custom description function: fun(file: string, meta: table): string
+  --- Link description format: string with %t/%s/%i/%k specifiers, or fun(file: string, meta: table): string.
+  --- Nil uses Denote's default (signature + two spaces + title when signature exists, else title).
+  link_description_format = nil,
+
+  --- Backwards-compatible alias for `link_description_format` as a function.
   link_description_function = nil,
+
+  --- Optional custom link opener: fun(path: string, how?: string)
+  open_link_function = nil,
+
+  --- Hooks called after creating a note or renaming a file (function or list of functions).
+  --- Neovim User autocmds `DenoteNewNote` and `DenoteRenameFile` are also emitted.
+  after_new_note_hook = nil,
+  after_rename_file_hook = nil,
 
   --- Show context lines in the backlinks buffer by default.
   backlinks_show_context = true,

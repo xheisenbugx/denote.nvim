@@ -140,7 +140,7 @@ local function pick_snacks(spec)
   _G.Snacks.picker.pick({
     title = spec.title,
     items = snacks_items,
-    preview = spec.preview == false and "none" or nil,
+    layout = spec.preview == false and { preset = "select" } or nil,
     format = function(sitem)
       local out = {}
       for _, c in ipairs(sitem._denote_item.display or {}) do

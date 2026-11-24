@@ -51,6 +51,9 @@ end
 M.open_or_create = function(...)
   return require("denote.create").open_or_create(...)
 end
+M.open_or_create_with_command = function(...)
+  return require("denote.create").open_or_create_with_command(...)
+end
 M.region = function(...)
   return require("denote.create").region(...)
 end
@@ -74,8 +77,14 @@ end
 M.rename_file_date = function(...)
   return require("denote.rename").rename_file_date(...)
 end
+M.rename_file_identifier = function(...)
+  return require("denote.rename").rename_file_identifier(...)
+end
 M.rename_file_using_front_matter = function(...)
   return require("denote.rename").rename_file_using_front_matter(...)
+end
+M.change_file_type_and_front_matter = function(...)
+  return require("denote.rename").change_file_type_and_front_matter(...)
 end
 M.add_front_matter = function(...)
   return require("denote.rename").add_front_matter(...)
@@ -97,11 +106,20 @@ end
 M.link_or_create = function(...)
   return require("denote.links").link_or_create(...)
 end
+M.link_or_create_with_command = function(...)
+  return require("denote.links").link_or_create_with_command(...)
+end
 M.link_after_creating = function(...)
   return require("denote.links").link_after_creating(...)
 end
 M.link_to_heading = function(...)
   return require("denote.links").link_to_heading(...)
+end
+M.link_to_file_with_contents = function(...)
+  return require("denote.links").link_to_file_with_contents(...)
+end
+M.link_to_all_files_with_contents = function(...)
+  return require("denote.links").link_to_all_files_with_contents(...)
 end
 M.add_links = function(...)
   return require("denote.links").add_links(...)
@@ -129,8 +147,14 @@ end
 M.find_backlink = function(...)
   return require("denote.backlinks").find_backlink(...)
 end
+M.find_backlink_with_location = function(...)
+  return require("denote.backlinks").find_backlink_with_location(...)
+end
 M.grep = function(...)
   return require("denote.query").grep(...)
+end
+M.grep_files_referenced_in_region = function(...)
+  return require("denote.query").grep_files_referenced_in_region(...)
 end
 M.query_contents_link = function(...)
   return require("denote.query").query_contents_link(...)

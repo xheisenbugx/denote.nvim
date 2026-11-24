@@ -63,17 +63,37 @@ function M.buffer_syntax(bufnr)
 end
 
 --- Compute default description text for a Denote file.
+--- Respects `link_description_format` (string with `%t`, `%s`, `%i`, `%k`, `%%` or function)
+--- and `link_description_function`.
 ---@param path string
 ---@return string
 function M.default_description(path)
-  if type(config.opts.link_description_function) == "function" then
-    local parsed = naming.parse_filename(path)
-    local res = config.opts.link_description_function(path, parsed)
+  local parsed = naming.parse_filename(path)
+  local fmt = config.opts.link_description_format or config.opts.link_description_function
+  if type(fmt) == "function" then
+    local res = fmt(path, parsed)
     if res and res ~= "" then
       return res
     end
+  elseif type(fmt) == "string" and fmt ~= "" then
+    local title = frontmatter.extract_title(path)
+    return (
+      fmt:gsub("%%([tsik%%])", function(c)
+        if c == "%" then
+          return "%"
+        elseif c == "t" then
+          return title
+        elseif c == "s" then
+          return parsed.signature or ""
+        elseif c == "i" then
+          return parsed.identifier or ""
+        elseif c == "k" then
+          return table.concat(parsed.keywords or {}, ", ")
+        end
+        return ""
+      end)
+    )
   end
-  local parsed = naming.parse_filename(path)
   local title = frontmatter.extract_title(path)
   if parsed.signature and parsed.signature ~= "" then
     return parsed.signature .. "  " .. title
@@ -283,19 +303,24 @@ function M.links_in_buffer(bufnr)
   return all
 end
 
---- Insert `text` at the cursor position in `bufnr` (replacing visual selection if active).
+--- Insert `text` cleanly at the cursor position in `bufnr`.
+--- Uses `nvim_put(..., "c", true, true)` in the current buffer so Normal-mode cursor on the
+--- last character of `"See heading: "` appends AFTER the cursor rather than splitting the word,
+--- while empty lines still insert at column 0 and multibyte UTF-8 characters are never sliced.
 ---@param text string
 ---@param bufnr? integer
-local function insert_at_cursor(text, bufnr)
+function M.insert_text(text, bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local pos = vim.api.nvim_win_get_cursor(0)
-  local row, col = pos[1] - 1, pos[2]
-  local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
-  local insert_col = math.min(col, #line)
-  local new_line = line:sub(1, insert_col) .. text .. line:sub(insert_col + 1)
-  vim.api.nvim_buf_set_lines(bufnr, row, row + 1, false, { new_line })
-  vim.api.nvim_win_set_cursor(0, { row + 1, insert_col + #text })
+  if bufnr == vim.api.nvim_get_current_buf() then
+    vim.api.nvim_put({ text }, "c", true, true)
+    return
+  end
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local last = vim.api.nvim_buf_get_lines(bufnr, line_count - 1, line_count, false)[1] or ""
+  vim.api.nvim_buf_set_lines(bufnr, line_count - 1, line_count, false, { last .. text })
 end
+
+local insert_at_cursor = M.insert_text
 
 --- Jump to a search target (`*Heading`, `#custom-id`, `#heading-slug`, `/regex/`, line number)
 --- inside the currently open buffer.
@@ -379,7 +404,11 @@ function M.follow_target(target, opts)
 
   -- Record jump in jumplist before navigating
   vim.cmd("normal! m'")
-  utils.open_file(file, opts.how)
+  if type(config.opts.open_link_function) == "function" then
+    config.opts.open_link_function(file, opts.how)
+  else
+    utils.open_file(file, opts.how)
+  end
   if parsed.search and parsed.search ~= "" then
     M.jump_to_search(parsed.search)
   end
@@ -403,6 +432,8 @@ end
 function M.link(opts)
   opts = opts or {}
   local bufnr = vim.api.nvim_get_current_buf()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(bufnr)
   local from_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":h")
 
@@ -422,6 +453,10 @@ function M.link(opts)
       file_path = target_path,
       from_dir = from_dir,
     })
+    if vim.api.nvim_win_is_valid(origin_win) then
+      vim.api.nvim_set_current_win(origin_win)
+      pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+    end
     insert_at_cursor(formatted, bufnr)
   end
 
@@ -467,6 +502,7 @@ function M.link_or_create(opts)
   opts = opts or {}
   local origin_buf = vim.api.nvim_get_current_buf()
   local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(origin_buf)
   local root = config.directory(opts.dir)
 
@@ -482,6 +518,10 @@ function M.link_or_create(opts)
     allow_query = true,
     create_label = "+ Create and link new note...",
     on_choice = function(chosen, query)
+      if vim.api.nvim_win_is_valid(origin_win) then
+        vim.api.nvim_set_current_win(origin_win)
+        pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+      end
       if chosen[1] then
         M.link({ target = chosen[1].value, id_only = opts.id_only })
       else
@@ -493,6 +533,7 @@ function M.link_or_create(opts)
           on_created = function(new_path, meta)
             if vim.api.nvim_win_is_valid(origin_win) then
               vim.api.nvim_set_current_win(origin_win)
+              pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
             end
             local desc = meta.title ~= "" and meta.title or M.default_description(new_path)
             local formatted = M.format_link(meta.identifier, desc, {
@@ -552,6 +593,8 @@ end
 function M.link_to_heading(opts)
   opts = opts or {}
   local origin_buf = vim.api.nvim_get_current_buf()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(origin_buf)
 
   local function pick_heading(target_path)
@@ -598,6 +641,10 @@ function M.link_to_heading(opts)
           syntax = syntax,
           file_path = target_path,
         })
+        if vim.api.nvim_win_is_valid(origin_win) then
+          vim.api.nvim_set_current_win(origin_win)
+          pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
+        end
         insert_at_cursor(formatted, origin_buf)
       end,
     })
@@ -721,6 +768,149 @@ function M.find_link()
       if chosen[1] then
         M.follow_target(chosen[1].value.target, { how = how })
       end
+    end,
+  })
+end
+
+--- Link to a Denote file whose contents match `query` (`denote-link-to-file-with-contents`).
+---@param query? string
+---@param opts? { id_only?: boolean, dir?: string }
+function M.link_to_file_with_contents(query, opts)
+  opts = opts or {}
+  local function run(q)
+    if not q or vim.trim(q) == "" then
+      return
+    end
+    local matches = require("denote.query").search_contents(vim.trim(q), { dir = opts.dir })
+    local seen, matched_files = {}, {}
+    for _, m in ipairs(matches) do
+      if not seen[m.file] then
+        seen[m.file] = true
+        matched_files[#matched_files + 1] = m.file
+      end
+    end
+    if #matched_files == 0 then
+      utils.notify("No Denote files contain: " .. q)
+      return
+    end
+    matched_files = sort.sort_files(matched_files, "identifier", true)
+    local items = {}
+    for i, p in ipairs(matched_files) do
+      items[i] = pickers.file_item(p, { dir = opts.dir })
+    end
+    pickers.pick({
+      title = string.format("Link to Note Matching %q", q),
+      items = items,
+      on_choice = function(chosen)
+        if chosen[1] then
+          M.link({ target = chosen[1].value, id_only = opts.id_only })
+        end
+      end,
+    })
+  end
+  if query ~= nil then
+    run(query)
+    return
+  end
+  vim.ui.input({ prompt = "Link to file containing: " }, function(input)
+    if input then
+      run(input)
+    end
+  end)
+end
+
+--- Insert a list of links to all Denote files whose contents match `query`
+--- (`denote-link-to-all-files-with-contents`).
+---@param query? string
+---@param opts? { id_only?: boolean, sort_by?: string, reverse?: boolean, dir?: string }
+---@return string[]|nil
+function M.link_to_all_files_with_contents(query, opts)
+  opts = opts or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+  local cur_path = utils.normalize(vim.api.nvim_buf_get_name(bufnr))
+  local syntax = M.buffer_syntax(bufnr)
+
+  local function run(q)
+    if not q or vim.trim(q) == "" then
+      return {}
+    end
+    local matches = require("denote.query").search_contents(vim.trim(q), { dir = opts.dir })
+    local seen, matched_files = {}, {}
+    for _, m in ipairs(matches) do
+      local norm = utils.normalize(m.file)
+      if norm ~= cur_path and not seen[norm] then
+        seen[norm] = true
+        matched_files[#matched_files + 1] = m.file
+      end
+    end
+    if #matched_files == 0 then
+      utils.notify("No Denote files contain: " .. q)
+      return {}
+    end
+    matched_files = sort.sort_files(matched_files, opts.sort_by or "identifier", opts.reverse)
+    local out = {}
+    for _, p in ipairs(matched_files) do
+      local id = naming.retrieve_identifier(p)
+      if id then
+        out[#out + 1] = "- "
+          .. M.format_link(id, M.default_description(p), { syntax = syntax, id_only = opts.id_only, file_path = p })
+      end
+    end
+    local lnum = vim.api.nvim_win_get_cursor(0)[1]
+    vim.api.nvim_buf_set_lines(bufnr, lnum, lnum, false, out)
+    return out
+  end
+
+  if query ~= nil then
+    return run(query)
+  end
+  vim.ui.input({ prompt = "Add links to all files containing: " }, function(input)
+    if input then
+      run(input)
+    end
+  end)
+end
+
+--- Link or create, prompting for which note-creation command to use
+--- (`denote-link-or-create-with-command`).
+---@param opts? { id_only?: boolean, dir?: string }
+function M.link_or_create_with_command(opts)
+  opts = opts or {}
+  local commands = {
+    { display = { { "note (default)", "DenoteTitle" } }, value = { "title", "keywords" } },
+    { display = { { "type (choose file type)", "DenoteTitle" } }, value = { "file_type", "title", "keywords" } },
+    { display = { { "date (custom date)", "DenoteTitle" } }, value = { "date", "title", "keywords" } },
+    { display = { { "subdirectory", "DenoteTitle" } }, value = { "subdirectory", "title", "keywords" } },
+    { display = { { "template", "DenoteTitle" } }, value = { "template", "title", "keywords" } },
+    { display = { { "signature", "DenoteTitle" } }, value = { "signature", "title", "keywords" } },
+  }
+  pickers.pick({
+    title = "Select Note Creation Command",
+    items = commands,
+    preview = false,
+    on_choice = function(chosen)
+      if not chosen[1] then
+        return
+      end
+      local origin_buf = vim.api.nvim_get_current_buf()
+      local origin_win = vim.api.nvim_get_current_win()
+      local syntax = M.buffer_syntax(origin_buf)
+      create.note({
+        dir = opts.dir,
+        prompts = chosen[1].value,
+        open = false,
+        save = true,
+        on_created = function(new_path, meta)
+          if vim.api.nvim_win_is_valid(origin_win) then
+            vim.api.nvim_set_current_win(origin_win)
+          end
+          local desc = meta.title ~= "" and meta.title or M.default_description(new_path)
+          M.insert_text(
+            M.format_link(meta.identifier, desc, { syntax = syntax, id_only = opts.id_only, file_path = new_path }),
+            origin_buf
+          )
+        end,
+      })
     end,
   })
 end

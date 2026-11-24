@@ -23,13 +23,20 @@ local ns = vim.api.nvim_create_namespace("denote_explorer")
 ---@return integer bufnr
 function M.open(opts)
   opts = opts or {}
+  local origin_buf = vim.api.nvim_get_current_buf()
+  local default_comp = config.opts.sort_dired_default_sort_component or "identifier"
+  local default_rev = config.opts.sort_dired_default_reverse_sort
+  if default_rev == nil then
+    default_rev = true
+  end
+
   local state = {
     dir = config.directory(opts.dir),
     regexp = opts.regexp or "",
     exclude_regexp = "",
     keyword = opts.keyword or "",
-    sort_by = opts.sort_by or "identifier",
-    reverse = opts.reverse == nil and true or opts.reverse,
+    sort_by = opts.sort_by or default_comp,
+    reverse = opts.reverse == nil and default_rev or opts.reverse,
     denote_only = opts.denote_only ~= false,
     marked = {}, -- { [path] = true }
     rows = {}, -- { [lnum] = path }
@@ -296,6 +303,8 @@ function M.open(opts)
       on_choice = function(chosen)
         if chosen[1] then
           state.sort_by = chosen[1].value
+          -- Identifier & last-modified default newest-first; signature/title/keywords ascending
+          state.reverse = (state.sort_by == "identifier" or state.sort_by == "last-modified")
           render()
         end
       end,
@@ -305,6 +314,47 @@ function M.open(opts)
     state.reverse = not state.reverse
     render()
   end, "reverse sort order")
+
+  map("G", function()
+    local targets = target_files()
+    if #targets == 0 then
+      targets = collect_files()
+    end
+    require("denote.query").grep(nil, { dir = state.dir, files = targets })
+  end, "grep marked / visible files")
+
+  map("L", function()
+    local targets = target_files()
+    if #targets == 0 then
+      return
+    end
+    local links = require("denote.links")
+    local syntax = vim.api.nvim_buf_is_valid(origin_buf) and links.buffer_syntax(origin_buf) or "markdown"
+    local out = {}
+    for _, p in ipairs(targets) do
+      local id = naming.retrieve_identifier(p)
+      if id then
+        out[#out + 1] = "- " .. links.format_link(id, links.default_description(p), { syntax = syntax, file_path = p })
+      end
+    end
+    if #out == 0 then
+      return
+    end
+    if vim.api.nvim_buf_is_valid(origin_buf) and vim.bo[origin_buf].buftype == "" and vim.bo[origin_buf].modifiable then
+      local lc = vim.api.nvim_buf_line_count(origin_buf)
+      vim.api.nvim_buf_set_lines(origin_buf, lc, lc, false, out)
+      utils.notify(
+        string.format(
+          "Inserted %d link(s) into %s",
+          #out,
+          vim.fn.fnamemodify(vim.api.nvim_buf_get_name(origin_buf), ":t")
+        )
+      )
+    else
+      vim.fn.setreg('"', table.concat(out, "\n") .. "\n")
+      utils.notify(string.format("Yanked %d link(s) to default register", #out))
+    end
+  end, "link marked notes into previous buffer")
 
   map("R", function()
     local targets = target_files()
@@ -318,6 +368,7 @@ function M.open(opts)
     end
     -- Batch actions on marked files (matching denote-dired-rename-marked-files*)
     local actions = {
+      { display = { { "Set/replace keywords on marked files", "DenoteTitle" } }, value = "set_kw" },
       { display = { { "Add keywords to marked files", "DenoteTitle" } }, value = "add_kw" },
       { display = { { "Remove keywords from marked files", "DenoteTitle" } }, value = "rem_kw" },
       { display = { { "Sync filenames from front matter", "DenoteTitle" } }, value = "from_fm" },
@@ -332,7 +383,17 @@ function M.open(opts)
           return
         end
         local act = chosen[1].value
-        if act == "add_kw" then
+        if act == "set_kw" then
+          vim.ui.input({ prompt = "Set keywords on marked files: " }, function(input)
+            if input ~= nil then
+              for _, f in ipairs(targets) do
+                rename.rename_sync({ file = f, keywords = utils.parse_keywords_input(input) })
+              end
+              state.marked = {}
+              render()
+            end
+          end)
+        elseif act == "add_kw" then
           vim.ui.input({ prompt = "Keywords to add: " }, function(input)
             if input and vim.trim(input) ~= "" then
               for _, f in ipairs(targets) do
@@ -418,6 +479,7 @@ function M.open(opts)
       { "c", "Clear all filters" },
       { "S / r", "Change sort component / reverse sort order" },
       { "m / u / U", "Mark / unmark / unmark all files" },
+      { "G / L", "Grep marked files / link marked notes into previous buffer" },
       { "R", "Rename file at cursor (or batch rename marked files)" },
       { "D", "Delete file(s) with confirmation" },
       { "a", "Toggle Denote-only vs all files (e.g. PDFs, images)" },

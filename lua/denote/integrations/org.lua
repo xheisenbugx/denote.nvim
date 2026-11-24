@@ -278,6 +278,16 @@ function M.attach()
     end,
     store = M.store_link,
     export = M.export_link,
+    complete = function()
+      local out = {}
+      for _, p in ipairs(files.list({ denote_only = true })) do
+        local id = naming.retrieve_identifier(p)
+        if id then
+          out[#out + 1] = "denote:" .. id
+        end
+      end
+      return out
+    end,
     face = "DenoteLink",
   }
 

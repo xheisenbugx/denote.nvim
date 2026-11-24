@@ -88,9 +88,42 @@ function M.files_for(identifier, opts)
   return sort.sort_files(out, opts.sort_by or "identifier", opts.reverse)
 end
 
---- Jump to a backlink via fuzzy picker (`denote-find-backlink`).
+--- Jump to a backlink file via fuzzy picker (`denote-find-backlink`).
 ---@param file? string
 function M.find_backlink(file)
+  local path = file or vim.api.nvim_buf_get_name(0)
+  local id = naming.retrieve_identifier(path)
+  if not id then
+    utils.warn("Current file is not a Denote note (no identifier)")
+    return
+  end
+
+  local backlink_files = M.files_for(id, { exclude_file = path })
+  if #backlink_files == 0 then
+    utils.notify("No backlinks found for " .. id)
+    return
+  end
+
+  local items = {}
+  for i, f in ipairs(backlink_files) do
+    items[i] = pickers.file_item(f)
+  end
+
+  pickers.pick({
+    title = "Backlinks to " .. frontmatter.extract_title(path),
+    items = items,
+    on_choice = function(chosen, _, how)
+      if chosen[1] then
+        utils.open_file(chosen[1].value, how)
+      end
+    end,
+  })
+end
+
+--- Jump directly to the exact line of a backlink via fuzzy picker
+--- (`denote-find-backlink-with-location`).
+---@param file? string
+function M.find_backlink_with_location(file)
   local path = file or vim.api.nvim_buf_get_name(0)
   local id = naming.retrieve_identifier(path)
   if not id then
@@ -121,7 +154,7 @@ function M.find_backlink(file)
   end
 
   pickers.pick({
-    title = "Backlinks to " .. frontmatter.extract_title(path),
+    title = "Backlink Locations for " .. frontmatter.extract_title(path),
     items = items,
     on_choice = function(chosen, _, how)
       if chosen[1] then
