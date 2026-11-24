@@ -3,13 +3,6 @@ name: Release
 on:
   push:
     branches: [main]
-  # Re-publish an existing release to LuaRocks (e.g. if LUAROCKS_API_KEY was not set yet
-  # when release-please created it).
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing release tag to publish to LuaRocks (e.g. v0.1.0)"
-        required: true
 
 concurrency:
   group: release-${{ github.ref }}
@@ -19,75 +12,14 @@ permissions: {}
 
 jobs:
   release-please:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
       pull-requests: write
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  luarocks:
-    name: Publish to LuaRocks
-    needs: release-please
-    # `always()` so the job still runs on workflow_dispatch, where release-please is skipped.
-    if: >-
-      always() &&
-      (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }}
-    steps:
-      - name: Check for LUAROCKS_API_KEY
-        id: key
-        env:
-          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
-        run: |
-          if [ -n "$LUAROCKS_API_KEY" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            msg="LUAROCKS_API_KEY secret is not set; skipping the LuaRocks upload for $TAG."
-            msg="$msg Add the secret, then run this workflow manually with tag=$TAG."
-            echo "::notice title=LuaRocks upload skipped::$msg"
-            echo "### LuaRocks upload skipped" >> "$GITHUB_STEP_SUMMARY"
-            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - uses: actions/checkout@v4
-        if: steps.key.outputs.present == 'true'
-        with:
-          ref: ${{ env.TAG }}
-          fetch-depth: 0
-
-      - name: Upload to LuaRocks
-        if: steps.key.outputs.present == 'true'
-        uses: nvim-neorocks/luarocks-tag-release@v9
-        env:
-          LUX_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
-        with:
-          name: denote.nvim
-          version: ${{ env.TAG }}
-          summary: Emacs Denote, rebuilt for Neovim in pure Lua
-          detailed_description: |
-            File-naming-first note-taking for Neovim with zero dependencies: Org mode
-            (org.nvim), Markdown (YAML and TOML front matter) and plain text notes,
-            backlinks, live query links, an explorer, silos, a daily journal, and
-            Folgezettel sequences. A pure-Lua port of the Emacs Denote package.
-          license: MIT
-          labels: |
-            neovim
-          copy_directories: |
-            doc
-            plugin

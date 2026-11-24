@@ -65,12 +65,6 @@ return {
 }
 ```
 
-With [rocks.nvim](https://github.com/nvim-neorocks/rocks.nvim):
-
-```vim
-:Rocks install denote.nvim
-```
-
 ### Pairing with [org.nvim](https://github.com/xheisenbugx/org.nvim)
 
 No extra glue code needed — set `file_type = "org"` (or mix `.org` and `.md` notes freely in the same directory) and `denote.nvim` automatically hooks into `org.nvim`:

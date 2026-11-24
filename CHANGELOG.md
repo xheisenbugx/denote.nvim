@@ -40,8 +40,8 @@ Changes made before release automation was set up. All of them ship in v0.1.0.
   parity spec, refreshed weekly in CI.
 - `make typecheck` (lua-language-server) in CI.
 - Generated Lua API reference `:help denote-api.txt` (`make docs`, checked in CI).
-- Automated releases with release-please and publishing to LuaRocks
-  (`:Rocks install denote.nvim`).
+- Automated releases (version tags, GitHub releases, and CHANGELOG entries) with
+  release-please.
 - `CONTRIBUTING.md`.
 
 ### Changed
