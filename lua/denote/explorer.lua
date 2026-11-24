@@ -1,0 +1,461 @@
+---@mod denote.explorer Interactive Denote Explorer (Dired / Menu / Sort-Dired buffer)
+---
+--- Combines Emacs `denote-dired-mode`, `denote-sort-dired`, and `denote-menu` into
+--- an idiomatic, colorized Neovim buffer with filtering, sorting, marking, and
+--- single or batch renaming.
+
+local config = require("denote.config")
+local create = require("denote.create")
+local files = require("denote.files")
+local frontmatter = require("denote.frontmatter")
+local naming = require("denote.naming")
+local pickers = require("denote.pickers")
+local rename = require("denote.rename")
+local sort = require("denote.sort")
+local utils = require("denote.utils")
+
+local M = {}
+
+local ns = vim.api.nvim_create_namespace("denote_explorer")
+
+--- Open the interactive Denote Explorer buffer.
+---@param opts? { dir?: string, regexp?: string, keyword?: string, sort_by?: string, reverse?: boolean, denote_only?: boolean }
+---@return integer bufnr
+function M.open(opts)
+  opts = opts or {}
+  local state = {
+    dir = config.directory(opts.dir),
+    regexp = opts.regexp or "",
+    exclude_regexp = "",
+    keyword = opts.keyword or "",
+    sort_by = opts.sort_by or "identifier",
+    reverse = opts.reverse == nil and true or opts.reverse,
+    denote_only = opts.denote_only ~= false,
+    marked = {}, -- { [path] = true }
+    rows = {}, -- { [lnum] = path }
+  }
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].filetype = "denote-explorer"
+  pcall(vim.api.nvim_buf_set_name, buf, "denote://explorer/" .. vim.fn.fnamemodify(state.dir, ":t"))
+
+  local function collect_files()
+    local list = files.list({
+      dir = state.dir,
+      denote_only = state.denote_only,
+      regexp = state.regexp ~= "" and state.regexp or nil,
+      not_regexp = state.exclude_regexp ~= "" and state.exclude_regexp or nil,
+    })
+    if state.keyword ~= "" then
+      local kw_slug = naming.sluggify_keyword(state.keyword)
+      list = vim.tbl_filter(function(p)
+        local parsed = naming.parse_filename(p)
+        return vim.tbl_contains(parsed.keywords or {}, kw_slug)
+      end, list)
+    end
+    return sort.sort_files(list, state.sort_by, state.reverse)
+  end
+
+  local function render()
+    local list = collect_files()
+    state.rows = {}
+    local lines, hls = {}, {}
+
+    local filters = {}
+    if state.regexp ~= "" then
+      filters[#filters + 1] = "/" .. state.regexp .. "/"
+    end
+    if state.keyword ~= "" then
+      filters[#filters + 1] = "kw:" .. state.keyword
+    end
+    if state.exclude_regexp ~= "" then
+      filters[#filters + 1] = "!/" .. state.exclude_regexp .. "/"
+    end
+    local filter_str = #filters > 0 and ("  filter: " .. table.concat(filters, " ")) or ""
+    local dir_arrow = state.reverse and "↓" or "↑"
+    local marked_count = vim.tbl_count(state.marked)
+    local mark_str = marked_count > 0 and string.format("  [%d marked]", marked_count) or ""
+
+    lines[1] = string.format(
+      "Denote Explorer: %s  (%d files · sort: %s %s)%s%s  (g? help)",
+      vim.fn.fnamemodify(state.dir, ":~"),
+      #list,
+      state.sort_by,
+      dir_arrow,
+      filter_str,
+      mark_str
+    )
+    hls[#hls + 1] = { 0, 0, -1, "DenoteBacklinksHeader" }
+    lines[2] = string.rep("─", 78)
+    hls[#hls + 1] = { 1, 0, -1, "DenoteDelimiter" }
+
+    if #list == 0 then
+      lines[3] = "  (no matching Denote files — press `n` to create one, `c` to clear filters)"
+      hls[#hls + 1] = { 2, 0, -1, "Comment" }
+    else
+      for _, path in ipairs(list) do
+        local parsed = naming.parse_filename(path)
+        local mark = state.marked[path] and "* " or "  "
+        local row = #lines + 1
+        state.rows[row] = path
+
+        local parts = {}
+        local col = 0
+        local function push(text, hl)
+          if text == "" then
+            return
+          end
+          parts[#parts + 1] = text
+          if hl then
+            hls[#hls + 1] = { row - 1, col, col + #text, hl }
+          end
+          col = col + #text
+        end
+
+        push(mark, state.marked[path] and "WarningMsg" or nil)
+        if parsed.identifier then
+          push(parsed.identifier, "DenoteIdentifier")
+        else
+          push(string.rep(" ", 15), "Comment")
+        end
+
+        if parsed.signature then
+          push(" ==" .. parsed.signature, "DenoteSignature")
+        end
+
+        local title = parsed.title and naming.desluggify("title", parsed.title) or parsed.filename
+        push("  " .. title, "DenoteTitle")
+
+        if #parsed.keywords > 0 then
+          push("  __" .. table.concat(parsed.keywords, "_"), "DenoteKeywords")
+        end
+
+        if parsed.extension ~= "" then
+          push(" " .. parsed.extension, "DenoteExtension")
+        end
+
+        lines[row] = table.concat(parts, "")
+      end
+    end
+
+    local cur_row = vim.api.nvim_win_get_cursor(0)[1]
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.bo[buf].modifiable = false
+
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    for _, h in ipairs(hls) do
+      pcall(vim.api.nvim_buf_add_highlight, buf, ns, h[4], h[1], h[2], h[3])
+    end
+
+    local max_row = vim.api.nvim_buf_line_count(buf)
+    vim.api.nvim_win_set_cursor(0, { math.max(3, math.min(cur_row, max_row)), 0 })
+  end
+
+  vim.cmd("enew")
+  vim.api.nvim_win_set_buf(0, buf)
+  render()
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+
+  local function current_file()
+    return state.rows[vim.api.nvim_win_get_cursor(0)[1]]
+  end
+
+  local function target_files()
+    local marked_list = {}
+    for p, v in pairs(state.marked) do
+      if v and utils.exists(p) then
+        marked_list[#marked_list + 1] = p
+      end
+    end
+    if #marked_list > 0 then
+      table.sort(marked_list)
+      return marked_list
+    end
+    local f = current_file()
+    return f and { f } or {}
+  end
+
+  local map = function(lhs, fn, desc)
+    vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, desc = "denote: " .. desc })
+  end
+
+  map("<CR>", function()
+    local f = current_file()
+    if f then
+      utils.open_file(f, "edit")
+    end
+  end, "open note")
+  map("o", function()
+    local f = current_file()
+    if f then
+      utils.open_file(f, "other")
+    end
+  end, "open note in other window")
+  map("v", function()
+    local f = current_file()
+    if f then
+      utils.open_file(f, "vsplit")
+    end
+  end, "open note in vsplit")
+  map("s", function()
+    local f = current_file()
+    if f then
+      utils.open_file(f, "split")
+    end
+  end, "open note in split")
+
+  map("m", function()
+    local f = current_file()
+    if f then
+      state.marked[f] = true
+      render()
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      if row < vim.api.nvim_buf_line_count(buf) then
+        vim.api.nvim_win_set_cursor(0, { row + 1, 0 })
+      end
+    end
+  end, "mark file")
+  map("u", function()
+    local f = current_file()
+    if f then
+      state.marked[f] = nil
+      render()
+    end
+  end, "unmark file")
+  map("U", function()
+    state.marked = {}
+    render()
+  end, "unmark all")
+
+  map("/", function()
+    vim.ui.input({ prompt = "Filter regexp: ", default = state.regexp }, function(input)
+      if input ~= nil then
+        state.regexp = vim.trim(input)
+        render()
+      end
+    end)
+  end, "filter by regexp")
+  map("f", function()
+    vim.ui.input({ prompt = "Filter regexp: ", default = state.regexp }, function(input)
+      if input ~= nil then
+        state.regexp = vim.trim(input)
+        render()
+      end
+    end)
+  end, "filter by regexp")
+  map("x", function()
+    vim.ui.input({ prompt = "Exclude regexp: ", default = state.exclude_regexp }, function(input)
+      if input ~= nil then
+        state.exclude_regexp = vim.trim(input)
+        render()
+      end
+    end)
+  end, "exclude by regexp")
+  map("k", function()
+    local kws = files.keywords(state.dir)
+    local items = {}
+    for _, kw in ipairs(kws) do
+      items[#items + 1] = { display = { { kw, "DenoteKeywords" } }, text = kw, value = kw }
+    end
+    pickers.pick({
+      title = "Filter by Keyword",
+      items = items,
+      preview = false,
+      on_choice = function(chosen)
+        if chosen[1] then
+          state.keyword = chosen[1].value
+          render()
+        end
+      end,
+    })
+  end, "filter by keyword")
+  map("c", function()
+    state.regexp = ""
+    state.exclude_regexp = ""
+    state.keyword = ""
+    render()
+  end, "clear filters")
+
+  map("S", function()
+    local items = {}
+    for _, comp in ipairs(sort.COMPONENTS) do
+      items[#items + 1] = {
+        display = { { comp, comp == state.sort_by and "DenoteIdentifier" or "DenoteTitle" } },
+        text = comp,
+        value = comp,
+      }
+    end
+    pickers.pick({
+      title = "Sort By Component",
+      items = items,
+      preview = false,
+      on_choice = function(chosen)
+        if chosen[1] then
+          state.sort_by = chosen[1].value
+          render()
+        end
+      end,
+    })
+  end, "sort by component")
+  map("r", function()
+    state.reverse = not state.reverse
+    render()
+  end, "reverse sort order")
+
+  map("R", function()
+    local targets = target_files()
+    if #targets == 0 then
+      return
+    end
+    if #targets == 1 then
+      rename.rename_file(targets[1])
+      vim.schedule(render)
+      return
+    end
+    -- Batch actions on marked files (matching denote-dired-rename-marked-files*)
+    local actions = {
+      { display = { { "Add keywords to marked files", "DenoteTitle" } }, value = "add_kw" },
+      { display = { { "Remove keywords from marked files", "DenoteTitle" } }, value = "rem_kw" },
+      { display = { { "Sync filenames from front matter", "DenoteTitle" } }, value = "from_fm" },
+      { display = { { "Add front matter to marked files", "DenoteTitle" } }, value = "add_fm" },
+    }
+    pickers.pick({
+      title = string.format("Batch Rename (%d marked files)", #targets),
+      items = actions,
+      preview = false,
+      on_choice = function(chosen)
+        if not chosen[1] then
+          return
+        end
+        local act = chosen[1].value
+        if act == "add_kw" then
+          vim.ui.input({ prompt = "Keywords to add: " }, function(input)
+            if input and vim.trim(input) ~= "" then
+              for _, f in ipairs(targets) do
+                rename.keywords_add(input, f)
+              end
+              state.marked = {}
+              render()
+            end
+          end)
+        elseif act == "rem_kw" then
+          vim.ui.input({ prompt = "Keywords to remove: " }, function(input)
+            if input and vim.trim(input) ~= "" then
+              for _, f in ipairs(targets) do
+                rename.keywords_remove(input, f)
+              end
+              state.marked = {}
+              render()
+            end
+          end)
+        elseif act == "from_fm" then
+          for _, f in ipairs(targets) do
+            rename.rename_file_using_front_matter(f)
+          end
+          state.marked = {}
+          render()
+        elseif act == "add_fm" then
+          for _, f in ipairs(targets) do
+            rename.add_front_matter(f)
+          end
+          state.marked = {}
+          render()
+        end
+      end,
+    })
+  end, "rename file / batch rename marked")
+
+  map("D", function()
+    local targets = target_files()
+    if #targets == 0 then
+      return
+    end
+    local msg = #targets == 1 and ("Delete " .. vim.fn.fnamemodify(targets[1], ":t") .. "?")
+      or string.format("Delete %d marked files?", #targets)
+    if vim.fn.confirm(msg, "&No\n&Yes", 1) == 2 then
+      for _, f in ipairs(targets) do
+        local b = utils.find_buffer(f)
+        if b then
+          pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+        os.remove(f)
+        state.marked[f] = nil
+      end
+      render()
+    end
+  end, "delete file(s)")
+
+  map("n", function()
+    create.note({
+      dir = state.dir,
+      save = true,
+      on_created = function()
+        if vim.api.nvim_buf_is_valid(buf) then
+          render()
+        end
+      end,
+    })
+  end, "create new note")
+
+  map("a", function()
+    state.denote_only = not state.denote_only
+    render()
+  end, "toggle denote-only / all files")
+
+  map("g", render, "refresh")
+  map("q", "<Cmd>bwipeout<CR>", "close explorer")
+  map("g?", function()
+    require("denote.ui").show_help("Denote Explorer", {
+      { "<CR> / o / v / s", "Open note (current / other / vsplit / split)" },
+      { "n", "Create a new note in this directory" },
+      { "/ or f", "Filter by filename regexp" },
+      { "k", "Filter by keyword" },
+      { "x", "Exclude by filename regexp" },
+      { "c", "Clear all filters" },
+      { "S / r", "Change sort component / reverse sort order" },
+      { "m / u / U", "Mark / unmark / unmark all files" },
+      { "R", "Rename file at cursor (or batch rename marked files)" },
+      { "D", "Delete file(s) with confirmation" },
+      { "a", "Toggle Denote-only vs all files (e.g. PDFs, images)" },
+      { "g / q", "Refresh / close explorer" },
+    })
+  end, "help")
+
+  return buf
+end
+
+--- Prompt for a regexp and sort component, then open the explorer (`denote-sort-dired`).
+---@param opts? { dir?: string }
+function M.sort_dired(opts)
+  opts = opts or {}
+  vim.ui.input({ prompt = "Match files regexp (empty for all): " }, function(regexp)
+    if regexp == nil then
+      return
+    end
+    local items = {}
+    for _, comp in ipairs(sort.COMPONENTS) do
+      items[#items + 1] = { display = { { comp, "DenoteTitle" } }, text = comp, value = comp }
+    end
+    pickers.pick({
+      title = "Sort By Component",
+      items = items,
+      preview = false,
+      on_choice = function(chosen)
+        if chosen[1] then
+          M.open({
+            dir = opts.dir,
+            regexp = vim.trim(regexp),
+            sort_by = chosen[1].value,
+            reverse = false,
+          })
+        end
+      end,
+    })
+  end)
+end
+
+return M

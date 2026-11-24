@@ -1,0 +1,237 @@
+*denote.txt*  Emacs Denote, rebuilt for Neovim in pure Lua
+
+==============================================================================
+CONTENTS                                                     *denote-contents*
+
+  1. Introduction .......................................... |denote-intro|
+  2. Installation & Setup .................................. |denote-setup|
+  3. File-Naming Scheme .................................... |denote-naming|
+  4. Front Matter & File Types ............................. |denote-frontmatter|
+  5. Commands .............................................. |denote-commands|
+  6. Keymaps ............................................... |denote-keymaps|
+  7. Org Mode (org.nvim) & Markdown ........................ |denote-syntax|
+  8. Configuration Reference ............................... |denote-config|
+  9. Lua API ............................................... |denote-api|
+
+==============================================================================
+1. INTRODUCTION                                                 *denote-intro*
+
+`denote.nvim` is a pure-Lua Neovim implementation of Protesilaos Stavrou's
+Emacs Denote package. It requires no external database, no tree-sitter parser,
+and no external binaries. Everything is driven by plain-text files and a
+predictable, human-readable, machine-parsable file-naming scheme.
+
+Because it reads and writes the exact same filenames, front matter, and
+`denote:` links as Emacs Denote, you can share one notes directory seamlessly
+between Emacs and Neovim—and pair it directly with `org.nvim` for Org files
+or use Markdown (YAML/TOML) and plain text out of the box.
+
+==============================================================================
+2. INSTALLATION & SETUP                                         *denote-setup*
+
+With lazy.nvim: >lua
+  {
+    "xheisenbugx/denote.nvim",
+    opts = {
+      directory = "~/Documents/notes",
+      file_type = "markdown-yaml", -- or "org", "markdown-toml", "text"
+      known_keywords = { "emacs", "neovim", "philosophy", "work" },
+    },
+  }
+<
+
+Run `:checkhealth denote` to verify your setup, picker backend, silos, and
+`org.nvim` integration.
+
+==============================================================================
+3. FILE-NAMING SCHEME                                          *denote-naming*
+
+Every Denote file follows the canonical scheme: >
+  DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION
+<
+  DATE        Unique timestamp identifier `YYYYMMDDTHHMMSS` (immutable ID).
+  ==SIGNATURE Optional Folgezettel / sequence string (e.g. `1a`, `1=2`).
+  --TITLE     Kebab-case sluggified title.
+  __KEYWORDS  Underscore-separated sorted keyword tags.
+  .EXTENSION  `.org`, `.md`, `.txt`, `.org.gpg`, `.pdf`, or any file type.
+
+Components can be reordered via `file_name_components_order`. When
+`"identifier"` is not first, it is prefixed with `@@` (Denote 3.x/4.x).
+
+==============================================================================
+4. FRONT MATTER & FILE TYPES                              *denote-frontmatter*
+
+Four built-in file types are supported (plus custom entries in `file_types`):
+
+  `org` (`.org`):
+    `#+title:`, `#+date:`, `#+filetags:`, `#+identifier:`, `#+signature:`
+
+  `markdown-yaml` (`.md`):
+    YAML block (`---`) with `title`, `date`, `tags`, `identifier`, `signature`
+
+  `markdown-toml` (`.md`):
+    TOML block (`+++`) with `title`, `date`, `tags`, `identifier`, `signature`
+
+  `text` (`.txt`):
+    Key/value header terminated by `---------------------------`
+
+==============================================================================
+5. COMMANDS                                                  *denote-commands*
+
+`:Denote [subcommand] [args]`                              *:Denote*
+  Unified command dispatcher with tab completion. Running `:Denote` with no
+  arguments creates a new note.
+
+  Creation:
+    `note [title]`              Create a new note
+    `open` / `open_or_create`   Open an existing note or create a new one
+    `type`                      Create a note choosing file type
+    `date`                      Create a note with a custom date
+    `subdirectory`              Create a note in a subdirectory
+    `template`                  Create a note using a named template
+    `signature`                 Create a note with a signature
+    `:DenoteRegion`             Create a note from visual selection
+
+  Linking & Navigation:
+    `link`                      Insert a link to an existing note
+    `link_id_only`              Insert an identifier-only link
+    `link_or_create`            Link to existing note or create & link
+    `link_after_creating`       Create a new note and link to it
+    `link_to_heading`           Link directly to an Org or Markdown heading
+    `add_links [regexp]`        Insert a list of links matching regexp
+    `follow`                    Follow the `denote:` link under the cursor
+    `find_link`                 Pick an outbound link in the current buffer
+    `backlinks`                 Open the interactive backlinks split buffer
+    `find_backlink`             Jump to a backlink via fuzzy picker
+    `convert_to_file_links`     Convert `denote:` links to relative file links
+    `convert_to_denote_links`   Convert relative file links to `denote:` links
+
+  Search & Explorer:
+    `grep [query]`              Full-text search across Denote notes
+    `query_contents_link [q]`   Insert a live `denote:query-contents:` link
+    `query_filenames_link [q]`  Insert a live `denote:query-filenames:` link
+    `explorer [regexp]`         Open the interactive Denote explorer buffer
+    `sort_dired`                Prompt for regexp & sort key, open explorer
+
+  Renaming & Front Matter:
+    `rename`                    Interactively rename any file + front matter
+    `rename_title`              Rename only the title
+    `rename_keywords`           Rename only the keywords
+    `rename_signature`          Rename only the signature
+    `rename_date`               Change the date / identifier
+    `rename_from_front_matter`  Sync filename on disk from front matter
+    `add_front_matter`          Add front matter to a file lacking it
+    `keywords_add [kws...]`     Add keyword(s) to current file
+    `keywords_remove [kws...]`  Remove keyword(s) from current file
+
+  Journal (`denote-journal`):
+    `journal [date]`            Open or create journal entry for today/date
+    `journal_new [date]`        Always create a new journal entry
+    `journal_link [date]`       Link to today's (or date's) journal entry
+
+  Sequences (`denote-sequence` / Folgezettel):
+    `sequence_parent`           Create new top-level sequence note (`1`, `2`)
+    `sequence_child`            Create child sequence note (`1=1` / `1a`)
+    `sequence_sibling`          Create sibling sequence note (`1=2` / `1b`)
+    `sequence_find`             Fuzzy-pick any sequence note
+    `sequence_relatives`        Jump to parent, siblings, children, descendants
+    `sequence_link`             Insert link to a sequence note
+    `sequence_reparent`         Move current note under a new parent
+
+  Silos (`denote-silo`):
+    `silo_create`               Create a note inside a chosen silo
+    `silo_open`                 Open or create a note in a chosen silo
+    `silo_explorer`             Open explorer in a chosen silo
+    `silo_switch [dir]`         Switch active Denote directory for session
+
+  Org Dynamic Blocks (`denote-org`):
+    `dblock_links [regexp]`     Insert `#+BEGIN: denote-links` block
+    `dblock_backlinks`          Insert `#+BEGIN: denote-backlinks` block
+    `dblock_files [regexp]`     Insert `#+BEGIN: denote-files` block
+    `dblock_update`             Update all `denote-*` dynamic blocks in buffer
+
+==============================================================================
+6. KEYMAPS                                                    *denote-keymaps*
+
+All global keymaps live under `mappings.prefix` (default `<leader>n`):
+
+  `<leader>nn`   New note (visual mode: create note from region)
+  `<leader>no`   Open or create note
+  `<leader>nt`   New note (choose file type)
+  `<leader>nd`   New note (custom date)
+  `<leader>ns`   New note (subdirectory)
+  `<leader>nT`   New note (template)
+  `<leader>nS`   New note (signature)
+  `<leader>nl`   Insert link
+  `<leader>nL`   Link or create note
+  `<leader>nh`   Link to heading (Org / Markdown)
+  `<leader>na`   Add links matching regexp
+  `<leader>nf`   Find outbound link
+  `<leader>nb`   Open backlinks buffer
+  `<leader>nB`   Find backlink (picker)
+  `<leader>ng`   Grep notes
+  `<leader>nqc`  Insert query-contents link
+  `<leader>nqf`  Insert query-filenames link
+  `<leader>ne`   Open Denote explorer
+  `<leader>nr`   Rename file
+  `<leader>nR`   Rename file from front matter
+  `<leader>nk`   Add keywords
+  `<leader>nK`   Remove keywords
+  `<leader>nj`   Today's journal entry
+  `<leader>nJ`   Link to today's journal entry
+  `<leader>nz*`  Sequence commands (`p`, `c`, `s`, `f`, `r`, `l`)
+  `<leader>nw*`  Silo commands (`c`, `o`, `e`)
+
+Inside Org, Markdown, and plain text buffers, `<CR>` follows any `denote:`
+link under the cursor and falls back to normal `<CR>` everywhere else.
+Press `g?` inside Explorer, Backlinks, or Query buffers for a keymap float.
+
+==============================================================================
+7. ORG MODE (ORG.NVIM) & MARKDOWN                              *denote-syntax*
+
+When `xheisenbugx/org.nvim` is installed, `denote.nvim` automatically hooks:
+  - `org.config.opts.links.types.denote` (`follow`, `store`, `export`, `face`)
+  - `org.dblock` writers for `denote-links`, `denote-backlinks`, `denote-files`
+
+Pressing `<CR>` in an `.org` file follows `[[denote:ID][Title]]`,
+`[[denote:ID::*Heading][Title::Heading]]`, `[[denote:ID::#custom-id][...]]`,
+and live query links. `<leader>ols` stores a `denote:` link for the current
+note, and `org.nvim` export converts `denote:` links for HTML, Markdown,
+LaTeX, ASCII, and Org automatically.
+
+In Markdown files, links default to `[Title](denote:ID)` (configurable via
+`markdown_link_style = "denote" | "wiki" | "relative"`), and heading links
+jump cleanly to matching `# Heading` slugs.
+
+==============================================================================
+8. CONFIGURATION REFERENCE                                     *denote-config*
+
+See `lua/denote/config.lua` for all defaults:
+  - `directory` (string|fun():string)        Default: `"~/Documents/notes"`
+  - `file_type` (string)                     Default: `"markdown-yaml"`
+  - `known_keywords` (string[])              Predefined keywords
+  - `infer_keywords` (boolean)               Infer keywords from existing files
+  - `sort_keywords` (boolean)                Sort keywords alphabetically
+  - `prompts` (string[])                     Default: `{ "title", "keywords" }`
+  - `file_name_components_order` (string[])  Component ordering
+  - `templates` (table)                      Named body templates
+  - `markdown_link_style` (string)           `"denote"`, `"wiki"`, `"relative"`
+  - `picker` (string)                        `"auto"`, `"snacks"`, `"fzf-lua"`, `"telescope"`, `"mini"`, `"select"`
+  - `silos` (string[])                       Additional isolated note directories
+  - `journal` (table)                        Journal directory, keyword, format
+  - `sequence` (table)                       `{ scheme = "numeric" | "alphanumeric" }`
+  - `ui` (table)                             Link highlighting, concealment, broken link checks
+  - `integrations` (table)                   `{ org = true, which_key = true }`
+  - `mappings` (table)                       `{ enabled = true, prefix = "<leader>n", follow_link = "<CR>" }`
+
+==============================================================================
+9. LUA API                                                        *denote-api*
+
+`require("denote")` exposes every operation programmatically: >lua
+  local denote = require("denote")
+  denote.create_sync({ title = "Hello", keywords = { "lua" }, file_type = "org" })
+  denote.rename_sync({ file = path, title = "Renamed", keywords = { "done" } })
+  denote.follow_target("20261123T191500::#intro")
+  denote.statusline() -- formatted note title for lualine / winbar
+<
+vim:tw=78:ts=8:ft=help:norl:

@@ -1,0 +1,18 @@
+local denote = require("denote")
+
+describe("denote.explorer", function()
+  it("opens explorer with filtered and sorted notes", function()
+    with_temp_dir(function(dir)
+      denote.setup({ directory = dir, file_type = "markdown-yaml", mappings = { enabled = false } })
+      denote.create_sync({ title = "First Note", keywords = { "alpha" }, date = "2026-11-23 09:00:00", open = false })
+      denote.create_sync({ title = "Second Note", keywords = { "beta" }, date = "2026-11-23 09:05:00", open = false })
+
+      local buf = denote.explorer({ dir = dir, keyword = "alpha" })
+      ok(vim.api.nvim_buf_is_valid(buf))
+      local lines = buf_lines(buf)
+      local joined = table.concat(lines, "\n")
+      ok(joined:find("First note", 1, true) ~= nil)
+      eq(nil, joined:find("Second note", 1, true))
+    end)
+  end)
+end)
