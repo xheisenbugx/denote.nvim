@@ -44,6 +44,8 @@ function M.buffer_syntax(bufnr)
     return "org"
   elseif ft == "markdown" or ft == "md" or ft == "mdx" then
     return "markdown"
+  elseif ft == "text" then
+    return "text"
   end
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name ~= "" then
@@ -61,6 +63,17 @@ function M.buffer_syntax(bufnr)
     return "markdown"
   end
   return "text"
+end
+
+--- Directory of `bufnr` if it has a file path, otherwise active Denote directory.
+---@param bufnr integer
+---@return string
+local function buffer_dir(bufnr)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name ~= "" then
+    return vim.fn.fnamemodify(utils.normalize(name), ":h")
+  end
+  return config.directory()
 end
 
 --- Compute default description text for a Denote file.
@@ -130,6 +143,14 @@ function M.format_link(target, description, opts)
     elseif style == "relative" and opts.file_path then
       local from_dir = opts.from_dir or config.directory()
       local rel = utils.relpath(opts.file_path, from_dir)
+      local parsed = M.parse_target(target)
+      if parsed.search and parsed.search ~= "" then
+        if parsed.search:sub(1, 1) == "#" then
+          rel = rel .. parsed.search
+        elseif parsed.search:sub(1, 1) == "*" then
+          rel = rel .. "#" .. naming.sluggify_title(parsed.search:sub(2))
+        end
+      end
       return string.format("[%s](%s)", desc, rel)
     end
     return string.format("[%s](denote:%s)", desc, target)
@@ -248,14 +269,43 @@ function M.parse_line(line, lnum)
     init = e + 1
   end
 
-  -- 5. Plain bare link: denote:ID or denote:ID::search
+  -- 4b. Relative Markdown link pointing to a Denote file: [DESC](path/to/ID--title.md#anchor)
   init = 1
   while true do
-    local s, e, target = line:find("denote:([^%s%[%]%(%)<>\"']+)", init)
+    local s, e, desc, href = line:find("%[([^%]]*)%]%(([^%)]+)%)", init)
     if not s then
       break
     end
-    add(s, e, line:sub(s, e), target, nil, "plain")
+    if not is_occupied(s, e) and not (s > 1 and line:sub(s - 1, s - 1) == "!") then
+      if
+        not href:match("^denote:")
+        and not href:match("^https?://")
+        and not href:match("^mailto:")
+        and not href:match("^#")
+      then
+        local file_part, anchor = href:match("^([^#]+)(#.+)$")
+        local id = naming.retrieve_identifier(file_part or href)
+        if id then
+          local target = anchor and (id .. "::" .. anchor) or id
+          add(s, e, line:sub(s, e), target, desc, "markdown")
+        end
+      end
+    end
+    init = e + 1
+  end
+
+  -- 5. Plain bare link: denote:ID or denote:ID::search
+  init = 1
+  while true do
+    local s, e, target = line:find("denote:([^%s%[%]%(%)<>\"'`]+)", init)
+    if not s then
+      break
+    end
+    local trimmed = target:gsub("[.,;:!?]+$", "")
+    if trimmed ~= "" then
+      local final_e = e - (#target - #trimmed)
+      add(s, final_e, line:sub(s, final_e), trimmed, nil, "plain")
+    end
     init = e + 1
   end
 
@@ -294,7 +344,7 @@ function M.links_in_buffer(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local all = {}
   for lnum, line in ipairs(lines) do
-    if line:find("denote:", 1, true) then
+    if line:find("denote:", 1, true) or line:find("](", 1, true) then
       for _, link in ipairs(M.parse_line(line, lnum)) do
         all[#all + 1] = link
       end
@@ -435,7 +485,7 @@ function M.link(opts)
   local origin_win = vim.api.nvim_get_current_win()
   local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(bufnr)
-  local from_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":h")
+  local from_dir = buffer_dir(bufnr)
 
   local function do_insert(target_path, desc)
     local id = naming.retrieve_identifier(target_path)
@@ -497,13 +547,14 @@ end
 
 --- Link to an existing note or create a new note and insert a link to it
 --- (`denote-link-or-create`).
----@param opts? { id_only?: boolean, dir?: string }
+---@param opts? { id_only?: boolean, dir?: string, prompts?: string[] }
 function M.link_or_create(opts)
   opts = opts or {}
   local origin_buf = vim.api.nvim_get_current_buf()
   local origin_win = vim.api.nvim_get_current_win()
   local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(origin_buf)
+  local from_dir = buffer_dir(origin_buf)
   local root = config.directory(opts.dir)
 
   local all_files = sort.sort_files(files.list({ dir = root, denote_only = true }), "identifier", true)
@@ -527,6 +578,7 @@ function M.link_or_create(opts)
       else
         create.note({
           dir = root,
+          prompts = opts.prompts,
           _initial_title = query and vim.trim(query) ~= "" and vim.trim(query) or nil,
           open = false,
           save = true,
@@ -540,6 +592,7 @@ function M.link_or_create(opts)
               syntax = syntax,
               id_only = opts.id_only,
               file_path = new_path,
+              from_dir = from_dir,
             })
             insert_at_cursor(formatted, origin_buf)
             utils.notify("Created and linked: " .. vim.fn.fnamemodify(new_path, ":t"))
@@ -558,18 +611,20 @@ function M.link_after_creating(opts)
   local origin_buf = vim.api.nvim_get_current_buf()
   local origin_pos = vim.api.nvim_win_get_cursor(0)
   local syntax = M.buffer_syntax(origin_buf)
+  local from_dir = buffer_dir(origin_buf)
 
   create.note({
     dir = opts.dir,
     save = true,
     open = true,
     on_created = function(new_path, meta)
-      if vim.api.nvim_buf_is_valid(origin_buf) then
+      if vim.api.nvim_buf_is_valid(origin_buf) and vim.bo[origin_buf].modifiable then
         local desc = meta.title ~= "" and meta.title or M.default_description(new_path)
         local formatted = M.format_link(meta.identifier, desc, {
           syntax = syntax,
           id_only = opts.id_only,
           file_path = new_path,
+          from_dir = from_dir,
         })
         local row = math.max(0, math.min(origin_pos[1] - 1, vim.api.nvim_buf_line_count(origin_buf) - 1))
         local col = origin_pos[2]
@@ -602,6 +657,7 @@ function M.link_to_heading(opts)
   local origin_win = vim.api.nvim_get_current_win()
   local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
   local syntax = M.buffer_syntax(origin_buf)
+  local from_dir = buffer_dir(origin_buf)
 
   local function pick_heading(target_path)
     local headings = frontmatter.extract_headings(target_path)
@@ -646,6 +702,7 @@ function M.link_to_heading(opts)
         local formatted = M.format_link(id .. "::" .. search_opt, desc, {
           syntax = syntax,
           file_path = target_path,
+          from_dir = from_dir,
         })
         if vim.api.nvim_win_is_valid(origin_win) then
           vim.api.nvim_set_current_win(origin_win)
@@ -689,7 +746,9 @@ function M.add_links(regexp, opts)
   local bufnr = vim.api.nvim_get_current_buf()
   local origin_lnum = vim.api.nvim_win_get_cursor(0)[1]
   local cur_path = utils.normalize(vim.api.nvim_buf_get_name(bufnr))
+  local cur_real = cur_path ~= "" and config.canonicalize(cur_path) or ""
   local syntax = M.buffer_syntax(bufnr)
+  local from_dir = buffer_dir(bufnr)
   local root = config.directory(opts.dir)
 
   local function insert_for(pat)
@@ -703,7 +762,7 @@ function M.add_links(regexp, opts)
     })
     -- Exclude current file
     matched = vim.tbl_filter(function(p)
-      return utils.normalize(p) ~= cur_path
+      return utils.normalize(p) ~= cur_path and utils.normalize(p) ~= cur_real
     end, matched)
     matched = sort.sort_files(matched, opts.sort_by or "identifier", opts.reverse)
 
@@ -723,7 +782,8 @@ function M.add_links(regexp, opts)
         end
       end
       if id then
-        out[#out + 1] = "- " .. M.format_link(id, desc, { syntax = syntax, id_only = opts.id_only, file_path = path })
+        out[#out + 1] = "- "
+          .. M.format_link(id, desc, { syntax = syntax, id_only = opts.id_only, file_path = path, from_dir = from_dir })
       end
     end
 
@@ -847,7 +907,9 @@ function M.link_to_all_files_with_contents(query, opts)
   local bufnr = vim.api.nvim_get_current_buf()
   local origin_lnum = vim.api.nvim_win_get_cursor(0)[1]
   local cur_path = utils.normalize(vim.api.nvim_buf_get_name(bufnr))
+  local cur_real = cur_path ~= "" and config.canonicalize(cur_path) or ""
   local syntax = M.buffer_syntax(bufnr)
+  local from_dir = buffer_dir(bufnr)
 
   local function run(q)
     if not vim.api.nvim_buf_is_valid(bufnr) or not q or vim.trim(q) == "" then
@@ -857,7 +919,7 @@ function M.link_to_all_files_with_contents(query, opts)
     local seen, matched_files = {}, {}
     for _, m in ipairs(matches) do
       local norm = utils.normalize(m.file)
-      if norm ~= cur_path and not seen[norm] then
+      if norm ~= cur_path and norm ~= cur_real and not seen[norm] then
         seen[norm] = true
         matched_files[#matched_files + 1] = m.file
       end
@@ -872,7 +934,11 @@ function M.link_to_all_files_with_contents(query, opts)
       local id = naming.retrieve_identifier(p)
       if id then
         out[#out + 1] = "- "
-          .. M.format_link(id, M.default_description(p), { syntax = syntax, id_only = opts.id_only, file_path = p })
+          .. M.format_link(
+            id,
+            M.default_description(p),
+            { syntax = syntax, id_only = opts.id_only, file_path = p, from_dir = from_dir }
+          )
       end
     end
     local lnum = math.min(origin_lnum, vim.api.nvim_buf_line_count(bufnr))
@@ -895,17 +961,13 @@ end
 ---@param opts? { id_only?: boolean, dir?: string }
 function M.link_or_create_with_command(opts)
   opts = opts or {}
-  local origin_buf = vim.api.nvim_get_current_buf()
-  local origin_win = vim.api.nvim_get_current_win()
-  local origin_pos = vim.api.nvim_win_get_cursor(origin_win)
-  local syntax = M.buffer_syntax(origin_buf)
   local commands = {
-    { display = { { "note (default)", "DenoteTitle" } }, value = { "title", "keywords" } },
-    { display = { { "type (choose file type)", "DenoteTitle" } }, value = { "file_type", "title", "keywords" } },
-    { display = { { "date (custom date)", "DenoteTitle" } }, value = { "date", "title", "keywords" } },
-    { display = { { "subdirectory", "DenoteTitle" } }, value = { "subdirectory", "title", "keywords" } },
-    { display = { { "template", "DenoteTitle" } }, value = { "template", "title", "keywords" } },
-    { display = { { "signature", "DenoteTitle" } }, value = { "signature", "title", "keywords" } },
+    { display = { { "note (default)", "DenoteTitle" } }, value = false },
+    { display = { { "type (choose file type)", "DenoteTitle" } }, value = "file_type" },
+    { display = { { "date (custom date)", "DenoteTitle" } }, value = "date" },
+    { display = { { "subdirectory", "DenoteTitle" } }, value = "subdirectory" },
+    { display = { { "template", "DenoteTitle" } }, value = "template" },
+    { display = { { "signature", "DenoteTitle" } }, value = "signature" },
   }
   pickers.pick({
     title = "Select Note Creation Command",
@@ -915,23 +977,12 @@ function M.link_or_create_with_command(opts)
       if not chosen[1] then
         return
       end
-      create.note({
-        dir = opts.dir,
-        prompts = chosen[1].value,
-        open = false,
-        save = true,
-        on_created = function(new_path, meta)
-          if vim.api.nvim_win_is_valid(origin_win) then
-            vim.api.nvim_set_current_win(origin_win)
-            pcall(vim.api.nvim_win_set_cursor, origin_win, origin_pos)
-          end
-          local desc = meta.title ~= "" and meta.title or M.default_description(new_path)
-          M.insert_text(
-            M.format_link(meta.identifier, desc, { syntax = syntax, id_only = opts.id_only, file_path = new_path }),
-            origin_buf
-          )
-        end,
-      })
+      local extra = chosen[1].value
+      local prompts = vim.deepcopy(config.opts.prompts or { "title", "keywords" })
+      if extra and not vim.tbl_contains(prompts, extra) then
+        table.insert(prompts, 1, extra)
+      end
+      M.link_or_create(vim.tbl_extend("force", opts, { prompts = prompts }))
     end,
   })
 end
@@ -947,22 +998,74 @@ function M.convert_links_to_file_paths(bufnr)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local count = 0
 
+  local function md_rel(target)
+    local parsed = M.parse_target(target)
+    if parsed.kind ~= "id" or not parsed.identifier then
+      return nil
+    end
+    local file = files.find_by_id(parsed.identifier)
+    if not file then
+      return nil
+    end
+    local rel = utils.relpath(file, base_dir)
+    if parsed.search and parsed.search ~= "" then
+      if parsed.search:sub(1, 1) == "#" then
+        rel = rel .. parsed.search
+      elseif parsed.search:sub(1, 1) == "*" then
+        rel = rel .. "#" .. naming.sluggify_title(parsed.search:sub(2))
+      end
+    end
+    return rel
+  end
+
+  local function org_rel(target)
+    local parsed = M.parse_target(target)
+    if parsed.kind ~= "id" or not parsed.identifier then
+      return nil
+    end
+    local file = files.find_by_id(parsed.identifier)
+    if not file then
+      return nil
+    end
+    local rel = utils.relpath(file, base_dir)
+    if parsed.search and parsed.search ~= "" then
+      rel = rel .. "::" .. parsed.search
+    end
+    return rel
+  end
+
   for i, line in ipairs(lines) do
     if line:find("denote:", 1, true) then
-      -- Markdown: [desc](denote:ID) -> [desc](relpath)
-      local new_line = line:gsub("%[([^%]]*)%]%(denote:(" .. naming.ID_PATTERN .. ")%)", function(desc, id)
-        local target = files.find_by_id(id)
-        if target then
+      -- Markdown: [desc](denote:ID(::search)?) -> [desc](relpath)
+      local new_line = line:gsub("%[([^%]]*)%]%(denote:([^%)]+)%)", function(desc, target)
+        local rel = md_rel(target)
+        if rel then
           count = count + 1
-          return string.format("[%s](%s)", desc, utils.relpath(target, base_dir))
+          return string.format("[%s](%s)", desc, rel)
         end
       end)
-      -- Org: [[denote:ID][desc]] -> [[file:relpath][desc]]
-      new_line = new_line:gsub("%[%[denote:(" .. naming.ID_PATTERN .. ")%]%[([^%]]*)%]%]", function(id, desc)
-        local target = files.find_by_id(id)
-        if target then
+      -- Wiki: [[denote:ID(::search)?|desc]] -> [desc](relpath)
+      new_line = new_line:gsub("%[%[denote:([^%]|]+)|([^%]]*)%]%]", function(target, desc)
+        local rel = md_rel(target)
+        if rel then
           count = count + 1
-          return string.format("[[file:%s][%s]]", utils.relpath(target, base_dir), desc)
+          return string.format("[%s](%s)", desc, rel)
+        end
+      end)
+      -- Org: [[denote:ID(::search)?][desc]] -> [[file:relpath][desc]]
+      new_line = new_line:gsub("%[%[denote:([^%]]+)%]%[([^%]]*)%]%]", function(target, desc)
+        local rel = org_rel(target)
+        if rel then
+          count = count + 1
+          return string.format("[[file:%s][%s]]", rel, desc)
+        end
+      end)
+      -- Bare Org: [[denote:ID(::search)?]] -> [[file:relpath]]
+      new_line = new_line:gsub("%[%[denote:([^%]]+)%]%]", function(target)
+        local rel = org_rel(target)
+        if rel then
+          count = count + 1
+          return string.format("[[file:%s]]", rel)
         end
       end)
       lines[i] = new_line
@@ -985,23 +1088,37 @@ function M.convert_links_to_denote_paths(bufnr)
   local count = 0
 
   for i, line in ipairs(lines) do
-    -- Markdown: [desc](path/to/2026...md) -> [desc](denote:ID)
-    local new_line = line:gsub("%[([^%]]*)%]%(([^%)]+)%)", function(desc, href)
-      if href:match("^denote:") or href:match("^https?://") then
+    -- Markdown: [desc](path/to/2026...md#anchor) -> [desc](denote:ID::#anchor) (skipping images `![alt](...)`)
+    local new_line = line:gsub("()%[([^%]]*)%]%(([^%)]+)%)", function(pos, desc, href)
+      if pos > 1 and line:sub(pos - 1, pos - 1) == "!" then
         return nil
       end
-      local id = naming.retrieve_identifier(href)
+      if href:match("^denote:") or href:match("^https?://") or href:match("^mailto:") or href:match("^#") then
+        return nil
+      end
+      local file_part, anchor = href:match("^([^#]+)(#.+)$")
+      local id = naming.retrieve_identifier(file_part or href)
       if id then
         count = count + 1
-        return string.format("[%s](denote:%s)", desc, id)
+        return string.format("[%s](denote:%s)", desc, anchor and (id .. "::" .. anchor) or id)
       end
     end)
-    -- Org: [[file:path/to/2026...org][desc]] -> [[denote:ID][desc]]
+    -- Org: [[file:path/to/2026...org(::search)?][desc]] -> [[denote:ID(::search)?][desc]]
     new_line = new_line:gsub("%[%[file:([^%]]+)%]%[([^%]]*)%]%]", function(href, desc)
-      local id = naming.retrieve_identifier(href)
+      local file_part, search = href:match("^(.-)::(.*)$")
+      local id = naming.retrieve_identifier(file_part or href)
       if id then
         count = count + 1
-        return string.format("[[denote:%s][%s]]", id, desc)
+        return string.format("[[denote:%s][%s]]", search and (id .. "::" .. search) or id, desc)
+      end
+    end)
+    -- Bare Org: [[file:path/to/2026...org(::search)?]] -> [[denote:ID(::search)?]]
+    new_line = new_line:gsub("%[%[file:([^%]]+)%]%]", function(href)
+      local file_part, search = href:match("^(.-)::(.*)$")
+      local id = naming.retrieve_identifier(file_part or href)
+      if id then
+        count = count + 1
+        return string.format("[[denote:%s]]", search and (id .. "::" .. search) or id)
       end
     end)
     lines[i] = new_line

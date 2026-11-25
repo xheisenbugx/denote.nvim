@@ -268,16 +268,20 @@ function M.find_file()
     utils.open_file(found[1])
     return
   end
-  vim.ui.select(found, {
-    prompt = "Journal entry: ",
-    format_item = function(p)
-      return vim.fn.fnamemodify(p, ":t")
+  local pickers = require("denote.pickers")
+  local items = {}
+  for i, p in ipairs(found) do
+    items[i] = pickers.file_item(p)
+  end
+  pickers.pick({
+    title = "Journal Entry",
+    items = items,
+    on_choice = function(chosen, _, how)
+      if chosen[1] then
+        utils.open_file(chosen[1].value, how)
+      end
     end,
-  }, function(choice)
-    if choice then
-      utils.open_file(choice)
-    end
-  end)
+  })
 end
 
 --- Visit or create the journal entry for the period containing the day at point

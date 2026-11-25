@@ -83,6 +83,7 @@ function M.invalidate(dir)
   M.generation = M.generation + 1
   if dir then
     index[utils.normalize(dir)] = nil
+    index[config.directory(dir)] = nil
   else
     index = {}
   end
@@ -92,7 +93,13 @@ end
 ---@return denote.IndexEntry
 local function scan(root)
   local entry = { files = {}, dirs = {} }
+  local visited = {}
   local function walk(current)
+    local real = uv.fs_realpath(current) or current
+    if visited[real] then
+      return
+    end
+    visited[real] = true
     local handle = uv.fs_scandir(current)
     entry.dirs[current] = mtime_key(uv.fs_stat(current))
     if not handle then
@@ -257,7 +264,13 @@ function M.subdirectories(dir, include_root)
   end
 
   local dirs = include_root and { root } or {}
+  local visited = {}
   local function walk(current)
+    local real = uv.fs_realpath(current) or current
+    if visited[real] then
+      return
+    end
+    visited[real] = true
     local handle = uv.fs_scandir(current)
     if not handle then
       return
@@ -267,8 +280,14 @@ function M.subdirectories(dir, include_root)
       if not name then
         break
       end
+      local full = current .. "/" .. name
+      if typ == "link" or typ == nil or typ == "unknown" then
+        local st = uv.fs_stat(full)
+        if st and st.type then
+          typ = st.type
+        end
+      end
       if typ == "directory" and not is_excluded_dir(name) then
-        local full = current .. "/" .. name
         dirs[#dirs + 1] = full
         walk(full)
       end

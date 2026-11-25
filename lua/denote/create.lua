@@ -30,6 +30,7 @@ local M = {}
 ---@field context? denote.CaptureContext Capture context for template escapes (origin, region, answers)
 ---@field _initial_title? string Internal: default text for the title prompt
 ---@field _silo_dir? string Internal: create the note inside this silo
+---@field _region_code? { text: string, ft: string } Internal: code region wrapped after file_type is resolved
 
 ---@class denote.RegionOpts: denote.CreateOpts
 ---@field line1? integer First line of the region (default: `'<`)
@@ -51,6 +52,27 @@ local function resolve_template(template_name, meta, ctx)
     return require("denote.capture").expand_sync(tmpl, ctx)
   end
   return ""
+end
+
+--- Wrap a selected code block in Org or Markdown syntax for `target_ft`.
+---@param raw_text string
+---@param src_ft string
+---@param target_ft string
+---@return string
+local function wrap_code_block(raw_text, src_ft, target_ft)
+  if target_ft == "org" then
+    return string.format("#+begin_src %s\n%s\n#+end_src\n", src_ft, raw_text)
+  elseif target_ft == "markdown-yaml" or target_ft == "markdown-toml" then
+    local max_ticks = 2
+    for run in raw_text:gmatch("`+") do
+      if #run > max_ticks then
+        max_ticks = #run
+      end
+    end
+    local fence = string.rep("`", max_ticks + 1)
+    return string.format("%s%s\n%s\n%s\n", fence, src_ft, raw_text, fence)
+  end
+  return raw_text .. "\n"
 end
 
 --- Create a Denote note synchronously from resolved options (no prompts).
@@ -78,6 +100,22 @@ function M.create_sync(opts)
   end
 
   local existing = files.identifier_set(root)
+  if target_dir ~= root and utils.is_dir(target_dir) then
+    for eid in pairs(files.identifier_set(target_dir)) do
+      existing[eid] = true
+    end
+  end
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(b) then
+      local bname = vim.api.nvim_buf_get_name(b)
+      if bname ~= "" then
+        local bid = naming.retrieve_identifier(bname)
+        if bid then
+          existing[bid] = true
+        end
+      end
+    end
+  end
   local id = naming.unique_identifier(ts, existing)
   local _, ft = frontmatter.get_spec(opts.file_type)
   local ext = frontmatter.extension_for(ft)
@@ -110,12 +148,17 @@ function M.create_sync(opts)
   ctx.origin = ctx.origin or capture.origin()
   ctx.syntax, ctx.target_dir, ctx.date = capture.syntax_for(ft), target_dir, ctx.date or ts
 
+  local body_text = opts.body
+  if not body_text and opts._region_code then
+    body_text = wrap_code_block(opts._region_code.text, opts._region_code.ft, ft)
+  end
+
   -- Body parts: named template, capture body template, then literal body (blank line between).
   local parts = { { resolve_template(opts.template, meta, ctx) } }
   if opts.body_template then
     parts[#parts + 1] = { capture.expand_sync(opts.body_template, ctx) }
   end
-  parts[#parts + 1] = { opts.body or "" }
+  parts[#parts + 1] = { body_text or "" }
   local content, cursor_abs, used = frontmatter.format(meta), nil, 0
   for _, part in ipairs(parts) do
     if part[1] ~= "" then
@@ -166,12 +209,6 @@ function M.create_sync(opts)
     pos[1] = math.min(pos[1], line_count)
     meta.cursor = pos
     pcall(vim.api.nvim_win_set_cursor, 0, pos)
-    if not should_save then
-      -- Also write if user requested save_buffer_after_creation
-      if config.opts.save_buffer_after_creation then
-        vim.cmd("silent write")
-      end
-    end
   end
 
   if opts.on_created then
@@ -515,13 +552,21 @@ function M.open_or_create_with_command(opts)
         return
       end
       local cmd = chosen[1].value
+      local base = config.opts.prompts or { "title", "keywords" }
+      local function with_extra(extra)
+        local list = vim.deepcopy(base)
+        if extra and not vim.tbl_contains(list, extra) then
+          table.insert(list, 1, extra)
+        end
+        return list
+      end
       local prompt_map = {
-        note = config.opts.prompts or { "title", "keywords" },
-        type = { "file_type", "title", "keywords" },
-        date = { "date", "title", "keywords" },
-        subdirectory = { "subdirectory", "title", "keywords" },
-        template = { "template", "title", "keywords" },
-        signature = { "signature", "title", "keywords" },
+        note = vim.deepcopy(base),
+        type = with_extra("file_type"),
+        date = with_extra("date"),
+        subdirectory = with_extra("subdirectory"),
+        template = with_extra("template"),
+        signature = with_extra("signature"),
       }
       M.open_or_create(vim.tbl_extend("force", opts, { prompts = prompt_map[cmd] }))
     end,
@@ -545,18 +590,12 @@ function M.region(opts)
   local raw_text = table.concat(selected, "\n")
 
   local is_prose = src_ft == "" or src_ft == "text" or src_ft == "markdown" or src_ft == "org"
-  local _, target_ft = frontmatter.get_spec(opts.file_type)
-
-  if not is_prose then
-    if target_ft == "org" then
-      opts.body = string.format("#+begin_src %s\n%s\n#+end_src\n", src_ft, raw_text)
-    elseif target_ft == "markdown-yaml" or target_ft == "markdown-toml" then
-      opts.body = string.format("```%s\n%s\n```\n", src_ft, raw_text)
+  if opts.body == nil then
+    if not is_prose then
+      opts._region_code = { text = raw_text, ft = src_ft }
     else
       opts.body = raw_text .. "\n"
     end
-  else
-    opts.body = raw_text .. "\n"
   end
   opts.context = opts.context or { region = raw_text, origin = require("denote.capture").origin(bufnr) }
 

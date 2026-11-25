@@ -138,17 +138,57 @@ local function quote_double(s)
   return '"' .. (s or ""):gsub("\\", "\\\\"):gsub('"', '\\"') .. '"'
 end
 
---- Unquote a YAML/TOML string value.
+--- Unquote a YAML/TOML string value (ignoring any trailing `# comment` outside quotes).
 ---@param s string
 ---@return string
 local function unquote(s)
   s = vim.trim(s or "")
-  if #s >= 2 then
-    local first, last = s:sub(1, 1), s:sub(-1)
-    if first == '"' and last == '"' then
-      return (s:sub(2, -2):gsub('\\"', '"'):gsub("\\\\", "\\"))
-    elseif first == "'" and last == "'" then
-      return (s:sub(2, -2):gsub("''", "'"))
+  local first = s:sub(1, 1)
+  if first == '"' then
+    local out = {}
+    local i, n = 2, #s
+    while i <= n do
+      local c = s:sub(i, i)
+      if c == "\\" and i < n then
+        local nx = s:sub(i + 1, i + 1)
+        if nx == '"' or nx == "\\" then
+          out[#out + 1] = nx
+          i = i + 2
+        else
+          out[#out + 1] = c .. nx
+          i = i + 2
+        end
+      elseif c == '"' then
+        local rest = vim.trim(s:sub(i + 1))
+        if rest == "" or rest:sub(1, 1) == "#" then
+          return table.concat(out)
+        end
+        break
+      else
+        out[#out + 1] = c
+        i = i + 1
+      end
+    end
+  elseif first == "'" then
+    local out = {}
+    local i, n = 2, #s
+    while i <= n do
+      local c = s:sub(i, i)
+      if c == "'" then
+        if s:sub(i + 1, i + 1) == "'" then
+          out[#out + 1] = "'"
+          i = i + 2
+        else
+          local rest = vim.trim(s:sub(i + 1))
+          if rest == "" or rest:sub(1, 1) == "#" then
+            return table.concat(out)
+          end
+          break
+        end
+      else
+        out[#out + 1] = c
+        i = i + 1
+      end
     end
   end
   return s
@@ -263,21 +303,66 @@ function M.format(meta)
   return table.concat(lines, "\n") .. "\n"
 end
 
---- Parse inline YAML/TOML array string like `["a", "b"]` or `[a, b]`.
+--- Find the closing `]` of an inline array starting with `[`, respecting quotes.
 ---@param s string
----@return string[]
-local function parse_inline_list(s)
-  local inner = vim.trim(s or ""):match("^%[(.*)%]$")
-  if not inner then
-    return {}
+---@return integer|nil
+local function find_closing_bracket(s)
+  local quote = nil
+  local i, n = 2, #s
+  while i <= n do
+    local c = s:sub(i, i)
+    if quote then
+      if quote == '"' and c == "\\" then
+        i = i + 2
+      elseif c == quote then
+        if quote == "'" and s:sub(i + 1, i + 1) == "'" then
+          i = i + 2
+        else
+          quote = nil
+          i = i + 1
+        end
+      else
+        i = i + 1
+      end
+    else
+      if c == '"' or c == "'" then
+        quote = c
+      elseif c == "]" then
+        return i
+      end
+      i = i + 1
+    end
   end
-  local out = {}
-  for item in inner:gmatch("[^,]+") do
+  return nil
+end
+
+--- Split comma-separated items inside a list chunk, stripping unquoted `#` comments.
+---@param chunk string
+---@param out string[]
+local function collect_list_items(chunk, out)
+  local cleaned = chunk:gsub("%s+#.*$", "")
+  for item in cleaned:gmatch("[^,]+") do
     local v = unquote(item)
     if v ~= "" then
       out[#out + 1] = v
     end
   end
+end
+
+--- Parse inline YAML/TOML array string like `["a", "b"]` or `[a, b] # comment`.
+---@param s string
+---@return string[]
+local function parse_inline_list(s)
+  local trimmed = vim.trim(s or "")
+  if trimmed:sub(1, 1) ~= "[" then
+    return {}
+  end
+  local close = find_closing_bracket(trimmed)
+  if not close then
+    return {}
+  end
+  local out = {}
+  collect_list_items(trimmed:sub(2, close - 1), out)
   return out
 end
 
@@ -326,10 +411,18 @@ function M.parse_lines(lines, file_type)
     return res
   end
 
+  local custom_spec = (config.opts.file_types or {})[file_type]
+  if custom_spec and type(custom_spec.parse) == "function" then
+    local custom = custom_spec.parse(lines)
+    if type(custom) == "table" then
+      return custom
+    end
+  end
+
   if file_type == "org" then
     local first_lnum, last_lnum = nil, nil
     for i, line in ipairs(lines) do
-      local key, val = line:match("^#%+(%w+):%s*(.-)%s*$")
+      local key, val = line:match("^#%+([%w_%-]+):%s*(.-)%s*$")
       if key then
         first_lnum = first_lnum or i
         last_lnum = i
@@ -458,20 +551,39 @@ function M.parse_lines(lines, file_type)
     res.start_line = start_idx
     res.end_line = end_idx
 
+    local in_toml_tags = false
     for i = start_idx + 1, end_idx - 1 do
-      local key, val = lines[i]:match("^([%w_%-]+)%s*=%s*(.-)%s*$")
-      if key then
-        local low = key:lower()
-        if low == "title" then
-          res.title = unquote(val)
-        elseif low == "date" then
-          res.date = unquote(val)
-        elseif low == "tags" or low == "keywords" then
-          res.keywords = parse_inline_list(val)
-        elseif low == "identifier" then
-          res.identifier = unquote(val)
-        elseif low == "signature" then
-          res.signature = unquote(val)
+      local line = lines[i]
+      if in_toml_tags then
+        local close = find_closing_bracket("[" .. line)
+        if close then
+          collect_list_items(line:sub(1, close - 2), res.keywords)
+          in_toml_tags = false
+        else
+          collect_list_items(line, res.keywords)
+        end
+      else
+        local key, val = line:match("^([%w_%-]+)%s*=%s*(.-)%s*$")
+        if key then
+          local low = key:lower()
+          if low == "title" then
+            res.title = unquote(val)
+          elseif low == "date" then
+            res.date = unquote(val)
+          elseif low == "tags" or low == "keywords" then
+            local trimmed_val = vim.trim(val)
+            if trimmed_val:sub(1, 1) == "[" and not find_closing_bracket(trimmed_val) then
+              res.keywords = {}
+              collect_list_items(trimmed_val:sub(2), res.keywords)
+              in_toml_tags = true
+            else
+              res.keywords = parse_inline_list(val)
+            end
+          elseif low == "identifier" then
+            res.identifier = unquote(val)
+          elseif low == "signature" then
+            res.signature = unquote(val)
+          end
         end
       end
     end
@@ -525,9 +637,9 @@ function M.parse_file(path)
   local bufnr = utils.find_buffer(path)
   local lines
   if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
-    lines = vim.api.nvim_buf_get_lines(bufnr, 0, 50, false)
+    lines = vim.api.nvim_buf_get_lines(bufnr, 0, 200, false)
   else
-    lines = utils.read_lines(path, 50)
+    lines = utils.read_lines(path, 200)
   end
   local ft = M.detect_file_type(path, lines)
   if not ft then
@@ -547,24 +659,36 @@ function M.clear_cache()
   title_cache = {}
 end
 
+--- Evict a single path from the front matter title cache.
+---@param path string
+function M.evict_cache(path)
+  if not path or path == "" then
+    return
+  end
+  local norm = utils.normalize(path)
+  title_cache[norm] = nil
+  title_cache[config.canonicalize(norm)] = nil
+end
+
 ---@param path string
 ---@return string|nil
 local function front_matter_title(path)
-  local bufnr = utils.find_buffer(path)
+  local key_path = utils.normalize(path)
+  local bufnr = utils.find_buffer(key_path)
   if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
     -- Live buffer contents may differ from disk: never cache.
-    local fm = M.parse_file(path)
+    local fm = M.parse_file(key_path)
     return fm and fm.title ~= "" and fm.title or nil
   end
-  local st = uv.fs_stat(path)
+  local st = uv.fs_stat(key_path)
   local key = st and (st.mtime.sec .. "." .. (st.mtime.nsec or 0) .. ":" .. st.size) or ""
-  local hit = title_cache[path]
+  local hit = title_cache[key_path]
   if hit and hit.key == key then
     return hit.title or nil
   end
-  local fm = M.parse_file(path)
+  local fm = M.parse_file(key_path)
   local title = fm and fm.title ~= "" and fm.title or nil
-  title_cache[path] = { key = key, title = title or false }
+  title_cache[key_path] = { key = key, title = title or false }
   return title
 end
 
@@ -597,6 +721,10 @@ end
 ---@return boolean changed
 function M.rewrite_lines(lines, file_type, updates, opts)
   opts = opts or {}
+  local custom_spec = (config.opts.file_types or {})[file_type]
+  if custom_spec and type(custom_spec.rewrite) == "function" then
+    return custom_spec.rewrite(lines, updates, opts)
+  end
   local fm = M.parse_lines(lines, file_type)
   if not fm.has_front_matter then
     if not opts.add_if_missing then
@@ -624,6 +752,16 @@ function M.rewrite_lines(lines, file_type, updates, opts)
 
   -- Helper to format one field line in the target syntax
   local function format_field(key, value)
+    if key == "date" then
+      local formatted = type(value) == "number" and M.format_date(value, file_type) or tostring(value or "")
+      if file_type == "org" then
+        return "#+date:       " .. formatted
+      elseif file_type == "markdown-yaml" or file_type == "text" then
+        return "date:       " .. formatted
+      elseif file_type == "markdown-toml" then
+        return "date       = " .. formatted
+      end
+    end
     if file_type == "org" then
       if key == "title" then
         return "#+title:      " .. tostring(value or "")
@@ -690,6 +828,18 @@ function M.rewrite_lines(lines, file_type, updates, opts)
       and (fm.end_line - 1)
     or fm.end_line
 
+  local function has_more_yaml_items(idx)
+    for j = idx + 1, range_end do
+      local l = out[j]
+      if l:match("^%s*%-%s+") then
+        return true
+      elseif not (l:match("^%s*$") or l:match("^%s*#")) then
+        return false
+      end
+    end
+    return false
+  end
+
   local function upsert_field(key, value)
     if value == nil then
       return
@@ -723,10 +873,29 @@ function M.rewrite_lines(lines, file_type, updates, opts)
     if found_idx then
       -- For YAML block list tags (lines starting with `  - `), remove continuation lines
       if key == "keywords" and file_type == "markdown-yaml" then
-        while found_idx + 1 <= range_end and out[found_idx + 1]:match("^%s*%-%s+") do
-          table.remove(out, found_idx + 1)
-          range_end = range_end - 1
-          changed = true
+        while found_idx + 1 <= range_end do
+          local nxt = out[found_idx + 1]
+          if
+            nxt:match("^%s*%-%s+") or ((nxt:match("^%s*$") or nxt:match("^%s*#")) and has_more_yaml_items(found_idx))
+          then
+            table.remove(out, found_idx + 1)
+            range_end = range_end - 1
+            changed = true
+          else
+            break
+          end
+        end
+      elseif key == "keywords" and file_type == "markdown-toml" then
+        local rhs = vim.trim(out[found_idx]:match("^[^=]+=(.*)$") or "")
+        if rhs:sub(1, 1) == "[" and not find_closing_bracket(rhs) then
+          while found_idx + 1 <= range_end do
+            local nxt = table.remove(out, found_idx + 1)
+            range_end = range_end - 1
+            changed = true
+            if find_closing_bracket("[" .. nxt) then
+              break
+            end
+          end
         end
       end
       if out[found_idx] ~= new_line then
@@ -745,6 +914,7 @@ function M.rewrite_lines(lines, file_type, updates, opts)
   end
 
   upsert_field("title", updates.title)
+  upsert_field("date", updates.date)
   upsert_field("keywords", updates.keywords)
   upsert_field("identifier", updates.identifier)
   upsert_field("signature", updates.signature)
@@ -799,54 +969,85 @@ function M.extract_headings(path)
 
   if ft == "org" then
     local i = 1
+    local in_block = nil
     while i <= #lines do
-      local stars, text = lines[i]:match("^(%*+)%s+(.+)$")
-      if stars then
-        -- Strip trailing Org tags like `  :tag1:tag2:`
-        local clean = vim.trim(text:gsub("%s+:[^%s:]+:$", ""):gsub("%s+:[^%s]+:$", ""))
-        local custom_id = nil
-        -- Look ahead for :PROPERTIES: drawer immediately below heading
-        local j = i + 1
-        if lines[j] and lines[j]:match("^%s*:PROPERTIES:%s*$") then
-          j = j + 1
-          while j <= #lines and not lines[j]:match("^%s*:END:%s*$") do
-            local cid = lines[j]:match("^%s*:CUSTOM_ID:%s*(.-)%s*$")
-            if cid and cid ~= "" then
-              custom_id = cid
+      local low = lines[i]:lower()
+      if in_block then
+        if low:match("^%s*#%+end_" .. in_block .. "%s") or low:match("^%s*#%+end_" .. in_block .. "$") then
+          in_block = nil
+        end
+      else
+        local bname = low:match("^%s*#%+begin_([%w_%-]+)")
+        if
+          bname == "src"
+          or bname == "example"
+          or bname == "verbatim"
+          or bname == "quote"
+          or bname == "comment"
+          or bname == "export"
+        then
+          in_block = bname
+        else
+          local stars, text = lines[i]:match("^(%*+)%s+(.+)$")
+          if stars then
+            -- Strip trailing Org tags like `  :tag1:tag2:`
+            local clean = vim.trim(text:gsub("%s+:[^%s:]+:$", ""):gsub("%s+:[^%s]+:$", ""))
+            local custom_id = nil
+            -- Look ahead for :PROPERTIES: drawer immediately below heading
+            local j = i + 1
+            if lines[j] and lines[j]:match("^%s*:PROPERTIES:%s*$") then
+              j = j + 1
+              while j <= #lines and not lines[j]:match("^%s*:END:%s*$") do
+                local cid = lines[j]:match("^%s*:CUSTOM_ID:%s*(.-)%s*$")
+                if cid and cid ~= "" then
+                  custom_id = cid
+                end
+                j = j + 1
+              end
             end
-            j = j + 1
+            headings[#headings + 1] = {
+              text = clean,
+              level = #stars,
+              lnum = i,
+              custom_id = custom_id,
+              slug = naming.sluggify_title(clean),
+            }
           end
         end
-        headings[#headings + 1] = {
-          text = clean,
-          level = #stars,
-          lnum = i,
-          custom_id = custom_id,
-          slug = naming.sluggify_title(clean),
-        }
       end
       i = i + 1
     end
   else
     -- Markdown headings (skipping fenced code blocks and front matter)
-    local in_fence = false
+    local fence_char, fence_len = nil, 0
     local fm = ft and M.parse_lines(lines, ft) or nil
     local start_line = (fm and fm.has_front_matter) and (fm.end_line + 1) or 1
     for i = start_line, #lines do
       local line = lines[i]
-      if line:match("^%s*```") or line:match("^%s*~~~") then
-        in_fence = not in_fence
-      elseif not in_fence then
-        local hashes, text = line:match("^(#+)%s+(.+)$")
-        if hashes then
-          local clean = vim.trim(text:gsub("%s+#+%s*$", ""))
-          headings[#headings + 1] = {
-            text = clean,
-            level = #hashes,
-            lnum = i,
-            custom_id = nil,
-            slug = naming.sluggify_title(clean),
-          }
+      if fence_char then
+        local run, trailing = line:match("^%s*(" .. fence_char .. "+)(.*)$")
+        if run and #run >= fence_len and trailing:match("^%s*$") then
+          fence_char, fence_len = nil, 0
+        end
+      else
+        local ticks, tick_rest = line:match("^%s*(`+)(.*)$")
+        local tildes, tilde_rest = line:match("^%s*(~+)(.*)$")
+        if ticks and #ticks >= 3 and not tick_rest:find("`", 1, true) then
+          fence_char, fence_len = "`", #ticks
+        elseif tildes and #tildes >= 3 and not tilde_rest:find("~", 1, true) then
+          fence_char, fence_len = "~", #tildes
+        else
+          local hashes, text = line:match("^(#+)%s+(.+)$")
+          if hashes then
+            local clean = vim.trim(text:gsub("%s+#+%s*$", ""))
+            headings[#headings + 1] = {
+              text = clean,
+              level = #hashes,
+              lnum = i,
+              custom_id = nil,
+              slug = naming.sluggify_title(clean),
+            }
+          end
         end
       end
     end

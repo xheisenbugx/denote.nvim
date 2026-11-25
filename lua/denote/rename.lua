@@ -137,7 +137,35 @@ local function rename_on_disk_and_buffer(old_path, new_path)
     end
   end
 
+  frontmatter.evict_cache(old_norm)
   return true, nil, existed_on_disk
+end
+
+--- Collect all identifiers across the active Denote directory, `dir`, and open buffers (excluding `self_path`).
+---@param dir string
+---@param self_path? string
+---@return table<string, boolean>
+local function collect_existing_ids(dir, self_path)
+  local existing = files.identifier_set(config.directory())
+  local norm_dir = utils.normalize(dir)
+  if norm_dir ~= config.directory() and utils.is_dir(norm_dir) then
+    for id in pairs(files.identifier_set(norm_dir)) do
+      existing[id] = true
+    end
+  end
+  local self_norm = self_path and utils.normalize(self_path) or nil
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(b) then
+      local bname = vim.api.nvim_buf_get_name(b)
+      if bname ~= "" and utils.normalize(bname) ~= self_norm then
+        local bid = naming.retrieve_identifier(bname)
+        if bid then
+          existing[bid] = true
+        end
+      end
+    end
+  end
+  return existing
 end
 
 --- Update front matter on either the loaded buffer or the file on disk.
@@ -148,20 +176,20 @@ end
 ---@return boolean changed
 ---@return boolean saved_loaded
 local function sync_front_matter(path, updates, add_if_missing, force_save_loaded)
-  local ft = frontmatter.detect_file_type(path)
-  if not ft then
-    return false, false
-  end
-
   local bufnr = utils.find_buffer(path)
   if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local ft = frontmatter.detect_file_type(path, lines)
+    if not ft then
+      return false, false
+    end
+    local was_modified = vim.bo[bufnr].modified
     local new_lines, changed = frontmatter.rewrite_lines(lines, ft, updates, { add_if_missing = add_if_missing })
     local saved = false
     if changed and vim.bo[bufnr].modifiable then
       vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, new_lines)
     end
-    if (changed or force_save_loaded) and utils.exists(path) then
+    if (changed or (force_save_loaded and not was_modified)) and utils.exists(path) then
       save_loaded_buffer(bufnr, path)
       saved = true
     end
@@ -171,6 +199,10 @@ local function sync_front_matter(path, updates, add_if_missing, force_save_loade
       return false, false
     end
     local lines = utils.read_lines(path)
+    local ft = frontmatter.detect_file_type(path, lines)
+    if not ft then
+      return false, false
+    end
     local new_lines, changed = frontmatter.rewrite_lines(lines, ft, updates, { add_if_missing = add_if_missing })
     if changed then
       utils.write_lines(path, new_lines)
@@ -217,7 +249,7 @@ function M.rename_sync(opts)
       return nil, derr
     end
     ts = parsed_ts
-    local existing = files.identifier_set(dir)
+    local existing = collect_existing_ids(dir, path)
     if parsed.identifier then
       existing[parsed.identifier] = nil
     end
@@ -228,13 +260,15 @@ function M.rename_sync(opts)
     else
       local st = uv.fs_stat(path)
       local base_ts = (st and st.mtime and st.mtime.sec) or os.time()
-      id = naming.unique_identifier(base_ts, files.identifier_set(dir))
+      id = naming.unique_identifier(base_ts, collect_existing_ids(dir, path))
     end
   end
 
   local title = opts.title
   if title == nil then
-    title = (fm and fm.title) or (parsed.title and naming.desluggify("title", parsed.title)) or ""
+    title = (fm and fm.title and fm.title ~= "") and fm.title
+      or (parsed.title and naming.desluggify("title", parsed.title))
+      or ""
   end
 
   local keywords
@@ -281,6 +315,7 @@ function M.rename_sync(opts)
       if confirm_action("rewrite_front_matter", "Rewrite front matter in " .. new_name .. "?") then
         local _, did_save = sync_front_matter(new_path, {
           title = title,
+          date = ts,
           keywords = keywords,
           signature = signature,
           identifier = id,
@@ -305,7 +340,11 @@ function M.rename_sync(opts)
   if renamed_on_disk and not saved_loaded then
     local loaded_buf = utils.find_buffer(new_path)
     if loaded_buf and vim.api.nvim_buf_is_loaded(loaded_buf) then
-      save_loaded_buffer(loaded_buf, new_path)
+      if not vim.bo[loaded_buf].modified then
+        save_loaded_buffer(loaded_buf, new_path)
+      else
+        utils.warn("Renamed file on disk; buffer has unsaved edits — run :w to save")
+      end
     end
   end
 
@@ -339,7 +378,9 @@ function M.rename_file(file, on_done)
   local parsed = naming.parse_filename(path)
   local fm = frontmatter.parse_file(path)
 
-  local cur_title = (fm and fm.title) or (parsed.title and naming.desluggify("title", parsed.title)) or ""
+  local cur_title = (fm and fm.title and fm.title ~= "") and fm.title
+    or (parsed.title and naming.desluggify("title", parsed.title))
+    or ""
   local cur_kws = table.concat(parsed.keywords or {}, ", ")
   local cur_sig = parsed.signature or ""
 
@@ -385,7 +426,9 @@ function M.rename_file_title(file, on_done)
   end
   local parsed = naming.parse_filename(path)
   local fm = frontmatter.parse_file(path)
-  local cur = (fm and fm.title) or (parsed.title and naming.desluggify("title", parsed.title)) or ""
+  local cur = (fm and fm.title and fm.title ~= "") and fm.title
+    or (parsed.title and naming.desluggify("title", parsed.title))
+    or ""
   vim.ui.input({ prompt = "New title: ", default = cur }, function(input)
     if input == nil then
       return
@@ -552,7 +595,7 @@ function M.add_front_matter(file)
   end
   local parsed = naming.parse_filename(path)
   local id = parsed.identifier
-    or naming.unique_identifier(os.time(), files.identifier_set(vim.fn.fnamemodify(path, ":h")))
+    or naming.unique_identifier(os.time(), collect_existing_ids(vim.fn.fnamemodify(path, ":h"), path))
   local title = parsed.title and naming.desluggify("title", parsed.title) or naming.split_extension(parsed.filename)
   local changed = sync_front_matter(path, {
     title = title,
@@ -708,7 +751,7 @@ function M.change_file_type_and_front_matter(file, new_file_type)
     local id = (old_fm and old_fm.identifier and old_fm.identifier:match("^" .. naming.ID_PATTERN .. "$"))
         and old_fm.identifier
       or parsed.identifier
-      or naming.unique_identifier(os.time(), files.identifier_set(dir))
+      or naming.unique_identifier(os.time(), collect_existing_ids(dir, path))
     local title = (old_fm and old_fm.title and old_fm.title ~= "") and old_fm.title
       or (parsed.title and naming.desluggify("title", parsed.title))
       or naming.split_extension(parsed.filename)

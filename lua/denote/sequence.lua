@@ -233,11 +233,15 @@ function M.relatives(sig, dir)
   local my_parent = M.parent_of(sig, scheme)
   local res = { parent = nil, children = {}, siblings = {}, descendants = {} }
 
+  local my_key = scheme == "alphanumeric" and sig:lower() or sig
+  local my_parent_key = (my_parent and scheme == "alphanumeric") and my_parent:lower() or my_parent
+
   for _, path in ipairs(M.all_files(dir)) do
     local other_sig = naming.parse_filename(path).signature
-    if other_sig and other_sig ~= sig then
+    local other_key = other_sig and (scheme == "alphanumeric" and other_sig:lower() or other_sig) or nil
+    if other_sig and other_key ~= my_key then
       local op = M.split(other_sig, scheme)
-      if my_parent and other_sig == my_parent then
+      if my_parent_key and other_key == my_parent_key then
         res.parent = path
       end
       if M.parent_of(other_sig, scheme) == my_parent then
@@ -278,14 +282,12 @@ end
 ---@param callback fun(sig: string)
 local function with_base_signature(opts, title, callback)
   if opts and opts.signature then
-    callback(opts.signature)
-    return
+    return callback(opts.signature)
   end
   local cur = vim.api.nvim_buf_get_name(0)
   local cur_sig = cur ~= "" and naming.parse_filename(cur).signature or nil
   if cur_sig and M.is_valid(cur_sig) and not (opts and opts.pick) then
-    callback(cur_sig)
-    return
+    return callback(cur_sig)
   end
   local seq_files = M.all_files(opts and opts.dir)
   if #seq_files == 0 then
@@ -317,28 +319,30 @@ end
 
 --- Create a child sequence note (`denote-sequence-new-child`).
 ---@param opts? denote.SequenceCreateOpts
+---@return table|nil
 function M.new_child(opts)
   opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
-  with_base_signature(
+  return with_base_signature(
     { signature = opts.parent_signature, pick = opts.pick, dir = opts.dir },
     "Parent Sequence Note",
     function(parent_sig)
       opts.signature = M.next_child(parent_sig, opts.dir)
-      create.note(opts)
+      return create.note(opts)
     end
   )
 end
 
 --- Create a sibling sequence note (`denote-sequence-new-sibling`).
 ---@param opts? denote.SequenceCreateOpts
+---@return table|nil
 function M.new_sibling(opts)
   opts = vim.deepcopy(opts or {}) --[[@as denote.SequenceCreateOpts]]
-  with_base_signature(
+  return with_base_signature(
     { signature = opts.sibling_signature, pick = opts.pick, dir = opts.dir },
     "Sibling Sequence Note",
     function(sib_sig)
       opts.signature = M.next_sibling(sib_sig, opts.dir)
-      create.note(opts)
+      return create.note(opts)
     end
   )
 end
@@ -456,7 +460,8 @@ function M.link(opts)
 end
 
 --- Reparent the current note under a chosen parent sequence (`denote-sequence-reparent`).
----@param opts? { file?: string, parent_signature?: string, dir?: string }
+--- When `recursive` is true (or confirmed interactively), descendants are also renumbered.
+---@param opts? { file?: string, parent_signature?: string, dir?: string, recursive?: boolean }
 function M.reparent(opts)
   opts = opts or {}
   local path = opts.file or vim.api.nvim_buf_get_name(0)
@@ -465,12 +470,52 @@ function M.reparent(opts)
     return
   end
   local function apply(parent_sig)
+    local scheme = M.scheme()
+    local old_sig = naming.parse_filename(path).signature
+    local rel = (old_sig and M.is_valid(old_sig, scheme)) and M.relatives(old_sig, opts.dir) or nil
+    local do_recursive = opts.recursive
+    if rel and #rel.descendants > 0 and do_recursive == nil then
+      do_recursive = vim.fn.confirm(
+        string.format("Also reparent %d descendant(s) of %s?", #rel.descendants, old_sig),
+        "&Yes\n&No",
+        1
+      ) == 1
+    end
+
     local new_sig = M.next_child(parent_sig, opts.dir)
     local new_path, err = rename.rename_sync({ file = path, signature = new_sig })
     if err then
       utils.error(err)
-    elseif new_path then
-      utils.notify("Reparented to signature " .. new_sig)
+      return
+    end
+
+    local moved_desc = 0
+    if do_recursive and rel and #rel.descendants > 0 and old_sig then
+      local old_parts = M.split(old_sig, scheme)
+      local new_parts = M.split(new_sig, scheme)
+      for _, desc_path in ipairs(rel.descendants) do
+        local dsig = naming.parse_filename(desc_path).signature
+        if dsig then
+          local dparts = M.split(dsig, scheme)
+          local updated = vim.deepcopy(new_parts)
+          for idx = #old_parts + 1, #dparts do
+            updated[#updated + 1] = dparts[idx]
+          end
+          local target_sig = M.join(updated, scheme)
+          local ok_desc = rename.rename_sync({ file = desc_path, signature = target_sig })
+          if ok_desc then
+            moved_desc = moved_desc + 1
+          end
+        end
+      end
+    end
+
+    if new_path then
+      if moved_desc > 0 then
+        utils.notify(string.format("Reparented to signature %s (+ %d descendant(s))", new_sig, moved_desc))
+      else
+        utils.notify("Reparented to signature " .. new_sig)
+      end
     end
   end
   if opts.parent_signature then

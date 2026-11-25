@@ -27,10 +27,70 @@ function M.setup_highlights()
     DenoteBacklinksFile = { default = true, link = "Directory" },
     DenoteBacklinksLineNr = { default = true, link = "LineNr" },
     DenoteBacklinksMatch = { default = true, link = "Normal" },
+    DenoteJournalCalendarEntry = { default = true, link = "Special" },
+    DenoteJournalCalendarToday = { default = true, link = "Todo" },
+    DenoteJournalCalendarHeader = { default = true, link = "Title" },
+    DenoteJournalCalendarWeekday = { default = true, link = "Comment" },
   }
   for name, spec in pairs(groups) do
     vim.api.nvim_set_hl(0, name, spec)
   end
+end
+
+--- Define highlight groups if they have not yet been initialized (e.g. before `setup()`).
+function M.ensure_highlights()
+  local hl = vim.api.nvim_get_hl(0, { name = "DenoteTitle" })
+  if not hl or vim.tbl_isempty(hl) then
+    M.setup_highlights()
+  end
+end
+
+--- Return a set `{ [lnum] = true }` of 1-based line numbers inside fenced / source code blocks.
+---@param lines string[]
+---@param filetype? string
+---@return table<integer, boolean>
+function M.code_block_lines(lines, filetype)
+  local in_code = {}
+  if filetype == "org" then
+    local block = nil
+    for i, line in ipairs(lines) do
+      local low = line:lower()
+      if block then
+        in_code[i] = true
+        if low:match("^%s*#%+end_" .. block .. "%s") or low:match("^%s*#%+end_" .. block .. "$") then
+          block = nil
+        end
+      else
+        local bname = low:match("^%s*#%+begin_([%w_%-]+)")
+        if bname == "src" or bname == "example" or bname == "verbatim" then
+          block = bname
+          in_code[i] = true
+        end
+      end
+    end
+  else
+    local fence_char, fence_len = nil, 0
+    for i, line in ipairs(lines) do
+      if fence_char then
+        in_code[i] = true
+        local run, trailing = line:match("^%s*(" .. fence_char .. "+)(.*)$")
+        if run and #run >= fence_len and trailing:match("^%s*$") then
+          fence_char, fence_len = nil, 0
+        end
+      else
+        local ticks, tick_rest = line:match("^%s*(`+)(.*)$")
+        local tildes, tilde_rest = line:match("^%s*(~+)(.*)$")
+        if ticks and #ticks >= 3 and not tick_rest:find("`", 1, true) then
+          fence_char, fence_len = "`", #ticks
+          in_code[i] = true
+        elseif tildes and #tildes >= 3 and not tilde_rest:find("~", 1, true) then
+          fence_char, fence_len = "~", #tildes
+          in_code[i] = true
+        end
+      end
+    end
+  end
+  return in_code
 end
 
 local ns_diag = vim.api.nvim_create_namespace("denote_broken_links")
@@ -63,12 +123,14 @@ end
 --- Return the broken `denote:` ID links in `lines` (targets resolved like `follow_link`,
 --- i.e. across the active directory, silos, and the journal directory).
 ---@param lines string[]
+---@param filetype? string
 ---@return { lnum: integer, start_col: integer, end_col: integer, identifier: string }[]
-function M.broken_links(lines)
+function M.broken_links(lines, filetype)
   local out = {}
   local known = {}
+  local in_code = M.code_block_lines(lines, filetype)
   for lnum, line in ipairs(lines) do
-    if line:find("denote:", 1, true) then
+    if not in_code[lnum] and (line:find("denote:", 1, true) or line:find("](", 1, true)) then
       for _, link in ipairs(links.parse_line(line, lnum)) do
         local id = link.kind == "id" and link.identifier or nil
         if id then
@@ -89,8 +151,12 @@ end
 --- in Markdown and Plain Text buffers. (Org buffers with org.nvim get native link highlighting,
 --- but still receive broken-link diagnostics.)
 ---@param bufnr integer
-function M.decorate_buffer(bufnr)
+---@param force? boolean Bypass unchanged-state cache
+function M.decorate_buffer(bufnr, force)
   if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+    return
+  end
+  if vim.bo[bufnr].buftype ~= "" or vim.b[bufnr].denote_preview_path ~= nil then
     return
   end
   local ft = vim.bo[bufnr].filetype
@@ -98,28 +164,43 @@ function M.decorate_buffer(bufnr)
     return
   end
   local ui_opts = config.opts.ui or {}
-  local check_broken = ui_opts.check_broken_links ~= false
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local broken = check_broken and M.broken_links(lines) or {}
-  set_diagnostics(bufnr, broken)
-
-  if not ui_opts.highlight_links then
+  local state_key = table.concat({
+    tostring(vim.api.nvim_buf_get_changedtick(bufnr)),
+    tostring(files.generation),
+    tostring(ui_opts.highlight_links),
+    tostring(ui_opts.conceal_links),
+    tostring(ui_opts.check_broken_links),
+    tostring(ui_opts.diagnostics),
+  }, ":")
+  if not force and vim.b[bufnr].denote_decorated_state == state_key then
     return
   end
+  vim.b[bufnr].denote_decorated_state = state_key
+
+  local check_broken = ui_opts.check_broken_links ~= false
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local broken = check_broken and M.broken_links(lines, ft) or {}
+  set_diagnostics(bufnr, broken)
+
   -- Skip Org buffers when org.nvim is active (org.nvim draws its own links & concealment)
   if ft == "org" and package.loaded["org"] then
     return
   end
 
   vim.api.nvim_buf_clear_namespace(bufnr, ns_links, 0, -1)
+  if not ui_opts.highlight_links then
+    return
+  end
+
   local conceal = ui_opts.conceal_links == true
   local broken_at = {}
   for _, b in ipairs(broken) do
     broken_at[b.lnum .. ":" .. b.start_col] = true
   end
 
+  local in_code = M.code_block_lines(lines, ft)
   for lnum, line in ipairs(lines) do
-    if line:find("denote:", 1, true) then
+    if not in_code[lnum] and (line:find("denote:", 1, true) or line:find("](", 1, true)) then
       for _, link in ipairs(links.parse_line(line, lnum)) do
         local hl = "DenoteLink"
         if link.kind ~= "id" then
@@ -157,6 +238,18 @@ function M.decorate_buffer(bufnr)
                 conceal = "",
               })
             end
+          elseif link.syntax == "wiki" then
+            local pipe_idx = line:find("|", link.start_col, true)
+            if pipe_idx then
+              pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_links, lnum - 1, link.start_col - 1, {
+                end_col = pipe_idx,
+                conceal = "",
+              })
+              pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_links, lnum - 1, link.end_col - 2, {
+                end_col = link.end_col,
+                conceal = "",
+              })
+            end
           end
         end
       end
@@ -170,17 +263,20 @@ end
 function M.show_help(title, rows)
   local max_key = 0
   for _, r in ipairs(rows) do
-    if #r[1] > max_key then
-      max_key = #r[1]
+    local w = vim.fn.strdisplaywidth(r[1])
+    if w > max_key then
+      max_key = w
     end
   end
   local lines = {}
-  local width = #title + 6
+  local width = vim.fn.strdisplaywidth(title) + 6
   for _, r in ipairs(rows) do
-    local line = string.format("  %-" .. max_key .. "s   %s", r[1], r[2])
+    local pad = string.rep(" ", max_key - vim.fn.strdisplaywidth(r[1]))
+    local line = string.format("  %s%s   %s", r[1], pad, r[2])
     lines[#lines + 1] = line
-    if #line + 2 > width then
-      width = #line + 2
+    local lw = vim.fn.strdisplaywidth(line) + 2
+    if lw > width then
+      width = lw
     end
   end
 
@@ -192,8 +288,8 @@ function M.show_help(title, rows)
   local ui = vim.api.nvim_list_uis()[1]
   local cols = ui and ui.width or 80
   local total_rows = ui and ui.height or 24
-  local win_w = math.min(width, cols - 4)
-  local win_h = math.min(#lines, total_rows - 4)
+  local win_w = math.max(1, math.min(width, cols - 4))
+  local win_h = math.max(1, math.min(#lines, total_rows - 4))
 
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor",

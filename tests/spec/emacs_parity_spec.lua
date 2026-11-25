@@ -53,11 +53,6 @@ local KNOWN_DIFFERENCES = {
     reason = "Emacs only treats spaces as word separators (tabs are kept verbatim); denote.nvim treats any "
       .. "whitespace as a separator",
   },
-  {
-    id = "parse/@@custom-id--free-form-identifier.md/identifier",
-    reason = "denote.nvim only recognises date identifiers (YYYYMMDDTHHMMSS); Emacs Denote 4.x also accepts "
-      .. "free-form `@@` identifiers",
-  },
 }
 
 local function known_difference(id)

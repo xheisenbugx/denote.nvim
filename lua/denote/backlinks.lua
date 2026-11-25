@@ -28,23 +28,28 @@ local M = {}
 ---@param opts table
 ---@return denote.SearchSpec
 local function backlink_spec(identifier, opts)
-  local root = config.directory(opts.dir)
   local exclude = opts.exclude_file and utils.normalize(opts.exclude_file) or nil
   local exclude_real = exclude and config.canonicalize(exclude) or nil
-  local candidates = {}
-  for _, path in
-    ipairs(files.list({
-      dir = root,
-      denote_only = true,
-      text_only = true,
-      not_regexp = opts.not_regexp,
-      excluded_dirs_regexp = opts.excluded_dirs_regexp,
-    }))
-  do
-    if path ~= exclude and path ~= exclude_real then
-      candidates[#candidates + 1] = path
+  local dirs = opts.dir and { config.directory(opts.dir) } or files.search_dirs()
+  local seen_paths, candidates = {}, {}
+  for _, d in ipairs(dirs) do
+    for _, path in
+      ipairs(files.list({
+        dir = d,
+        denote_only = true,
+        text_only = true,
+        not_regexp = opts.not_regexp,
+        excluded_dirs_regexp = opts.excluded_dirs_regexp,
+      }))
+    do
+      local norm = utils.normalize(path)
+      if norm ~= exclude and norm ~= exclude_real and not seen_paths[norm] then
+        seen_paths[norm] = true
+        candidates[#candidates + 1] = path
+      end
     end
   end
+  local root = (#dirs == 1) and dirs[1] or nil
   return { pattern = identifier, fixed = true, case = "sensitive", files = candidates, root = root }
 end
 
@@ -90,7 +95,12 @@ end
 ---@type table<string, { value: boolean, pending?: boolean, time?: integer, generation?: integer }>
 local has_cache = {}
 
---- Return true if any note links to `identifier`. The answer is cached per identifier and
+--- Clear the cached backlink presence indicators (`%b` statusline cache).
+function M.clear_cache()
+  has_cache = {}
+end
+
+--- Return true if any note links to `identifier`. The answer is cached per directory & identifier and
 --- refreshed asynchronously, so this is cheap enough to call from a statusline.
 ---@param identifier string
 ---@param path? string The note itself (excluded from the search)
@@ -99,13 +109,14 @@ function M.has_backlinks(identifier, path)
   if not identifier or identifier == "" then
     return false
   end
-  local entry = has_cache[identifier]
+  local cache_key = config.directory() .. "\0" .. identifier
+  local entry = has_cache[cache_key]
   local now = (vim.uv or vim.loop).now()
   local ttl = (config.opts.search and config.opts.search.backlinks_indicator_ttl) or 10000
   if not entry or (not entry.pending and (now - entry.time > ttl or entry.generation ~= files.generation)) then
     entry = entry or { value = false }
     entry.pending = true
-    has_cache[identifier] = entry
+    has_cache[cache_key] = entry
     -- Record the generation the search started at: changes made while it runs trigger a re-check.
     local started_generation = files.generation
     M.find(identifier, { exclude_file = path }, function(matches)
@@ -224,6 +235,8 @@ local ns = vim.api.nvim_create_namespace("denote_backlinks")
 ---@param opts? { file?: string, show_context?: boolean, dir?: string }
 function M.open(opts)
   opts = opts or {}
+  require("denote.ui").ensure_highlights()
+  local origin_win = vim.api.nvim_get_current_win()
   local target_file = utils.normalize(opts.file or vim.api.nvim_buf_get_name(0))
   local id = naming.retrieve_identifier(target_file)
   if not id then
@@ -237,12 +250,24 @@ function M.open(opts)
     show_context = config.opts.backlinks_show_context ~= false
   end
 
+  local buf_name = "denote://backlinks/" .. id
+  local old_bufs = {}
+  local existing_win
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == buf_name then
+      local w = vim.fn.bufwinid(b)
+      if w ~= -1 and vim.api.nvim_win_is_valid(w) then
+        existing_win = w
+      end
+      old_bufs[#old_bufs + 1] = b
+    end
+  end
+
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = "denote-backlinks"
-  pcall(vim.api.nvim_buf_set_name, buf, "denote://backlinks/" .. id)
 
   local line_targets = {}
   local matches = {}
@@ -366,8 +391,19 @@ function M.open(opts)
     end)
   end
 
-  vim.cmd(config.opts.window_cmd or "botright 15split")
-  vim.api.nvim_win_set_buf(0, buf)
+  if existing_win and vim.api.nvim_win_is_valid(existing_win) then
+    vim.api.nvim_set_current_win(existing_win)
+    vim.api.nvim_win_set_buf(existing_win, buf)
+  else
+    vim.cmd(config.opts.window_cmd or "botright 15split")
+    vim.api.nvim_win_set_buf(0, buf)
+  end
+  for _, old_b in ipairs(old_bufs) do
+    if vim.api.nvim_buf_is_valid(old_b) then
+      pcall(vim.api.nvim_buf_delete, old_b, { force = true })
+    end
+  end
+  pcall(vim.api.nvim_buf_set_name, buf, buf_name)
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
     once = true,
@@ -385,7 +421,18 @@ function M.open(opts)
     if not target then
       return
     end
-    utils.open_file(target.file, how)
+    if
+      how == "other"
+      and origin_win ~= vim.api.nvim_get_current_win()
+      and vim.api.nvim_win_is_valid(origin_win)
+      and vim.api.nvim_win_get_config(origin_win).relative == ""
+      and vim.bo[vim.api.nvim_win_get_buf(origin_win)].buftype == ""
+    then
+      vim.api.nvim_set_current_win(origin_win)
+      utils.open_file(target.file, "edit")
+    else
+      utils.open_file(target.file, how)
+    end
     local max_lnum = math.max(1, vim.api.nvim_buf_line_count(0))
     vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(target.lnum, max_lnum)), math.max(0, target.col - 1) })
   end

@@ -211,6 +211,7 @@ local function subcommands()
     reindex = function()
       require("denote.files").invalidate()
       require("denote.frontmatter").clear_cache()
+      require("denote.backlinks").clear_cache()
       require("denote.search").reset()
       require("denote.utils").notify("Denote index cleared")
     end,
@@ -227,6 +228,7 @@ end
 --- Register `:Denote` and `:DenoteRegion` user commands.
 function M.register()
   vim.api.nvim_create_user_command("Denote", function(cmd_opts)
+    require("denote.ui").ensure_highlights()
     local fargs = cmd_opts.fargs or {}
     local sub = fargs[1]
     if not sub or sub == "" then
@@ -244,20 +246,46 @@ function M.register()
   end, {
     nargs = "*",
     desc = "Denote note-taking command dispatcher",
-    complete = function(arg_lead, cmd_line)
-      local parts = vim.split(cmd_line, "%s+", { trimempty = true })
-      if #parts <= 2 and not cmd_line:match("%s$") or (#parts == 1 and cmd_line:match("%s$")) then
-        local names = vim.tbl_keys(subcommands())
-        table.sort(names)
+    complete = function(arg_lead, cmd_line, cursor_pos)
+      local up_to_cursor = cursor_pos and cmd_line:sub(1, cursor_pos) or cmd_line
+      local ends_ws = up_to_cursor:match("%s$") ~= nil
+      local parts = vim.split(up_to_cursor, "%s+", { trimempty = true })
+      local arg_idx = #parts + (ends_ws and 1 or 0)
+      local function filter(list)
         return vim.tbl_filter(function(name)
           return name:sub(1, #arg_lead) == arg_lead
-        end, names)
+        end, list)
+      end
+      if arg_idx <= 2 then
+        local names = vim.tbl_keys(subcommands())
+        table.sort(names)
+        return filter(names)
+      end
+      local sub = parts[2]
+      if arg_idx == 3 then
+        if sub == "capture" then
+          return filter(require("denote.capture").keys())
+        elseif sub == "change_file_type" then
+          local fts = vim.tbl_keys(require("denote.frontmatter").file_types())
+          table.sort(fts)
+          return filter(fts)
+        elseif sub == "silo_switch" then
+          return filter(require("denote.silo").list())
+        end
+      end
+      if sub == "keywords_add" then
+        return filter(require("denote.files").keywords())
+      elseif sub == "keywords_remove" then
+        local path = vim.api.nvim_buf_get_name(0)
+        local kws = path ~= "" and require("denote.naming").parse_filename(path).keywords or {}
+        return filter(kws)
       end
       return {}
     end,
   })
 
   vim.api.nvim_create_user_command("DenoteRegion", function(cmd_opts)
+    require("denote.ui").ensure_highlights()
     require("denote").region({ line1 = cmd_opts.line1, line2 = cmd_opts.line2 })
   end, {
     range = true,
@@ -265,6 +293,7 @@ function M.register()
   })
 
   vim.api.nvim_create_user_command("DenoteCapture", function(cmd_opts)
+    require("denote.ui").ensure_highlights()
     require("denote").capture({
       key = cmd_opts.args ~= "" and cmd_opts.args or nil,
       line1 = cmd_opts.range > 0 and cmd_opts.line1 or nil,
@@ -273,13 +302,16 @@ function M.register()
   end, {
     range = true,
     nargs = "?",
-    complete = function()
-      return require("denote.capture").keys()
+    complete = function(arg_lead)
+      return vim.tbl_filter(function(k)
+        return k:sub(1, #arg_lead) == arg_lead
+      end, require("denote.capture").keys())
     end,
     desc = "Capture a Denote note from a capture template (range: selection becomes %i)",
   })
 
   vim.api.nvim_create_user_command("DenoteGrepRegion", function(cmd_opts)
+    require("denote.ui").ensure_highlights()
     require("denote").grep_files_referenced_in_region(
       cmd_opts.args ~= "" and cmd_opts.args or nil,
       { line1 = cmd_opts.line1, line2 = cmd_opts.line2 }

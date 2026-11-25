@@ -81,6 +81,10 @@ Four built-in file types are supported (plus custom entries in `file_types`):
   `text` (`.txt`):
     Key/value header terminated by `---------------------------`
 
+Custom entries in `file_types` can also supply `parse(lines)` and
+`rewrite(lines, updates, opts)` hooks to participate in `extract_title` and
+two-way front-matter sync.
+
 ==============================================================================
 5. COMMANDS                                                  *denote-commands*
 
@@ -251,9 +255,11 @@ See `lua/denote/config.lua` for all defaults:
   - `markdown_link_style` (string)           `"denote"`, `"wiki"`, `"relative"`
   - `picker` (string)                        `"auto"`, `"snacks"`, `"fzf-lua"`, `"telescope"`, `"mini"`, `"select"`
   - `silos` (string[])                       Additional isolated note directories
+  - `silos_auto_detect` (boolean)            Auto-scope `directory()` to current
+                                             buffer's silo (default: `false`)
   - `journal` (table)                        Journal directory, keyword, `interval`,
                                              `week_start`, `title_format` (|denote-journal|)
-  - `capture` (table)                        `specifiers`, `templates` (|denote-capture|)
+  - `capture` (table)                        `specifiers`, `picker`, `templates` (|denote-capture|)
   - `sequence` (table)                       `{ scheme = "numeric" | "alphanumeric" }`
   - `ui` (table)                             Link highlighting, concealment, broken link checks,
                                              `diagnostics`, `diagnostics_severity`, `debounce_ms`
@@ -318,8 +324,9 @@ Broken links ~
 `denote:` links whose identifier cannot be resolved are highlighted with
 `DenoteBrokenLink` and reported through |vim.diagnostic| (source `denote`,
 code `broken-link`), so they appear in `]d`, |vim.diagnostic.setqflist()|,
-and Trouble. Disable with `ui.diagnostics = false`. Checks are debounced
-(`ui.debounce_ms`) after leaving insert mode, saving, or regaining focus.
+and Trouble. Disable with `ui.diagnostics = false`. Checks skip fenced and Org
+source code blocks and are debounced (`ui.debounce_ms`) after leaving insert
+mode, saving, or regaining focus.
 
 Preview ~
 `:Denote preview` (or `K` on a link) shows the target's title, identifier,
@@ -397,6 +404,8 @@ Highlight groups:
 `capture` is a table with:
   - `specifiers`  Body used when a template has no `template`
                   (default "%l\n%i\n%?", like `denote-org-capture-specifiers`).
+  - `picker`      When true, use the fuzzy picker even for single-key templates
+                  (default `false`, which opens a single-key dispatch float).
   - `templates`   A list of entries: { key, description?, template?, title?,
                   keywords?, file_type?, subdirectory?, signature?, date?,
                   prompts?, target?, open?, save? }. Fields left unset are

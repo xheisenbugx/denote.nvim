@@ -68,11 +68,14 @@ local ns = vim.api.nvim_create_namespace("denote_query")
 ---@param opts? { dir?: string, files?: string[], file_regexp?: string }
 function M.grep(query, opts)
   opts = opts or {}
+  local origin_win = vim.api.nvim_get_current_win()
   local function open_results(q)
     if not q or vim.trim(q) == "" then
       return
     end
+    require("denote.ui").ensure_highlights()
     local current_query = vim.trim(q)
+    local root = config.directory(opts.dir)
     local scoped_files = opts.files
     local all_matches = {}
     local loading = true
@@ -85,19 +88,35 @@ function M.grep(query, opts)
     local reverse_sort = false
     local line_targets = {}
 
+    local buf_name = "denote://query/" .. current_query
+    local old_bufs = {}
+    local existing_win
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == buf_name then
+        local w = vim.fn.bufwinid(b)
+        if w ~= -1 and vim.api.nvim_win_is_valid(w) then
+          existing_win = w
+        end
+        old_bufs[#old_bufs + 1] = b
+      end
+    end
+
     local buf = vim.api.nvim_create_buf(false, true)
     vim.bo[buf].buftype = "nofile"
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].swapfile = false
     vim.bo[buf].filetype = "denote-query"
-    pcall(vim.api.nvim_buf_set_name, buf, "denote://query/" .. current_query)
 
     local function filtered_matches()
       local out = {}
+      local need_kw = #include_keywords > 0 or #exclude_keywords > 0
+      local root_prefix = root .. "/"
       for _, m in ipairs(all_matches) do
         local keep = true
-        local hay = m.file .. " " .. m.text
-        local parsed = naming.parse_filename(m.file)
+        local rel = m.file:sub(1, #root_prefix) == root_prefix and m.file:sub(#root_prefix + 1)
+          or utils.relpath(m.file, root)
+        local hay = rel .. " " .. m.text
+        local parsed = need_kw and naming.parse_filename(m.file) or nil
         for _, f in ipairs(include_filters) do
           if not utils.matches_pattern(hay, f) then
             keep = false
@@ -112,7 +131,7 @@ function M.grep(query, opts)
             end
           end
         end
-        if keep and #include_keywords > 0 then
+        if keep and parsed and #include_keywords > 0 then
           for _, kw in ipairs(include_keywords) do
             if not vim.tbl_contains(parsed.keywords or {}, kw) then
               keep = false
@@ -120,7 +139,7 @@ function M.grep(query, opts)
             end
           end
         end
-        if keep and #exclude_keywords > 0 then
+        if keep and parsed and #exclude_keywords > 0 then
           for _, kw in ipairs(exclude_keywords) do
             if vim.tbl_contains(parsed.keywords or {}, kw) then
               keep = false
@@ -262,8 +281,19 @@ function M.grep(query, opts)
       end)
     end
 
-    vim.cmd(config.opts.window_cmd or "botright 15split")
-    vim.api.nvim_win_set_buf(0, buf)
+    if existing_win and vim.api.nvim_win_is_valid(existing_win) then
+      vim.api.nvim_set_current_win(existing_win)
+      vim.api.nvim_win_set_buf(existing_win, buf)
+    else
+      vim.cmd(config.opts.window_cmd or "botright 15split")
+      vim.api.nvim_win_set_buf(0, buf)
+    end
+    for _, old_b in ipairs(old_bufs) do
+      if vim.api.nvim_buf_is_valid(old_b) then
+        pcall(vim.api.nvim_buf_delete, old_b, { force = true })
+      end
+    end
+    pcall(vim.api.nvim_buf_set_name, buf, buf_name)
     vim.api.nvim_create_autocmd("BufWipeout", {
       buffer = buf,
       once = true,
@@ -281,7 +311,18 @@ function M.grep(query, opts)
       if not t then
         return
       end
-      utils.open_file(t.file, how)
+      if
+        how == "other"
+        and origin_win ~= vim.api.nvim_get_current_win()
+        and vim.api.nvim_win_is_valid(origin_win)
+        and vim.api.nvim_win_get_config(origin_win).relative == ""
+        and vim.bo[vim.api.nvim_win_get_buf(origin_win)].buftype == ""
+      then
+        vim.api.nvim_set_current_win(origin_win)
+        utils.open_file(t.file, "edit")
+      else
+        utils.open_file(t.file, how)
+      end
       local max_lnum = math.max(1, vim.api.nvim_buf_line_count(0))
       vim.api.nvim_win_set_cursor(0, { math.max(1, math.min(t.lnum, max_lnum)), math.max(0, t.col - 1) })
     end
