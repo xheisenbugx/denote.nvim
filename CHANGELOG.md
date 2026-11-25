@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The project uses
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/); do not edit them by hand.
 
+## [0.2.0](https://github.com/xheisenbugx/denote.nvim/compare/v0.1.0...v0.2.0) (2026-11-25)
+
+
+### Features
+
+* apply codebase review fixes, hardening, and UX improvements ([5a18f42](https://github.com/xheisenbugx/denote.nvim/commit/5a18f42a5e26bdfa4442fbe046629f0c0c18206d))
+* apply codebase review fixes, hardening, and UX improvements ([1deb423](https://github.com/xheisenbugx/denote.nvim/commit/1deb4236a4d3561a347546fb805efb6018bd4755))
+
 ## 0.1.0 (2026-11-24)
 
 
