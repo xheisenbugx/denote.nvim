@@ -70,7 +70,9 @@ function M.unlinked_mentions(opts, on_done)
   end
   M.last_mention_target = { path = path, identifier = id, title = title }
 
-  local spec = { pattern = title, fixed = true, case = "insensitive", files = candidates_excluding(path) }
+  local use_word = title:match("^%w") ~= nil and title:match("%w$") ~= nil
+  local spec =
+    { pattern = title, fixed = true, word = use_word, case = "insensitive", files = candidates_excluding(path) }
   local quickfix = opts.quickfix ~= false and on_done == nil and opts.sync ~= true
 
   local function present(found)
@@ -101,9 +103,39 @@ function M.unlinked_mentions(opts, on_done)
   end)
 end
 
---- Replace the first mention of the last `unlinked_mentions` target on the current line with
---- a `denote:` link (description keeps the text exactly as written).
----@param target? { identifier: string, title: string }
+---@param line string
+---@return { [1]: integer, [2]: integer }[]
+local function link_spans(line)
+  local spans = {}
+  for _, l in ipairs(links.parse_line(line)) do
+    spans[#spans + 1] = { l.start_col, l.end_col }
+  end
+  for _, pat in ipairs({ "%[[^%]]*%]%([^%)]*%)", "%[%[[^%]]*%]%[[^%]]*%]%]", "%[%[[^%]]*%]%]" }) do
+    local init = 1
+    while true do
+      local s, e = line:find(pat, init)
+      if not s then
+        break
+      end
+      spans[#spans + 1] = { s, e }
+      init = e + 1
+    end
+  end
+  return spans
+end
+
+---@param b integer|nil
+---@return boolean
+local function is_word_byte(b)
+  if not b then
+    return false
+  end
+  return (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 95
+end
+
+--- Replace the first unlinked mention of the last `unlinked_mentions` target on the current line
+--- with a `denote:` link (description keeps the text exactly as written).
+---@param target? { identifier: string, title: string, path?: string }
 ---@return boolean
 function M.link_mention(target)
   target = target or M.last_mention_target
@@ -114,13 +146,47 @@ function M.link_mention(target)
   local bufnr = vim.api.nvim_get_current_buf()
   local lnum = vim.api.nvim_win_get_cursor(0)[1]
   local line = vim.api.nvim_get_current_line()
-  local s, e = line:lower():find(target.title:lower(), 1, true)
+  local low_line = line:lower()
+  local low_title = target.title:lower()
+  local need_wb_start = target.title:match("^%w") ~= nil
+  local need_wb_end = target.title:match("%w$") ~= nil
+  local spans = link_spans(line)
+
+  local s, e
+  local init = 1
+  while true do
+    local ms, me = low_line:find(low_title, init, true)
+    if not ms then
+      break
+    end
+    local overlaps = false
+    for _, sp in ipairs(spans) do
+      if not (me < sp[1] or ms > sp[2]) then
+        overlaps = true
+        break
+      end
+    end
+    local wb_ok = (not need_wb_start or not is_word_byte(ms > 1 and line:byte(ms - 1) or nil))
+      and (not need_wb_end or not is_word_byte(me < #line and line:byte(me + 1) or nil))
+    if not overlaps and wb_ok then
+      s, e = ms, me
+      break
+    end
+    init = ms + 1
+  end
+
   if not s then
     utils.warn('No mention of "' .. target.title .. '" on this line')
     return false
   end
   local original = line:sub(s, e)
-  local link = links.format_link(target.identifier, original, { syntax = links.buffer_syntax(bufnr) })
+  local buf_name = vim.api.nvim_buf_get_name(bufnr)
+  local from_dir = buf_name ~= "" and vim.fn.fnamemodify(utils.normalize(buf_name), ":h") or config.directory()
+  local link = links.format_link(target.identifier, original, {
+    syntax = links.buffer_syntax(bufnr),
+    file_path = target.path,
+    from_dir = from_dir,
+  })
   vim.api.nvim_buf_set_lines(bufnr, lnum - 1, lnum, false, { line:sub(1, s - 1) .. link .. line:sub(e + 1) })
   return true
 end
@@ -129,29 +195,53 @@ end
 ---@field broken { file: string, lnum: integer, col: integer, identifier: string }[]
 ---@field orphans string[] Notes no other note links to
 
+--- Read lines of `path` (from loaded buffer if open, else disk).
+---@param path string
+---@return string[]
+local function file_lines(path)
+  local bufnr = utils.find_buffer(path)
+  if bufnr and vim.api.nvim_buf_is_loaded(bufnr) then
+    return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  end
+  return utils.read_lines(path)
+end
+
 --- Build the vault report from all lines containing `denote:` links.
 ---@param notes string[]
 ---@param matches denote.SearchMatch[]
 ---@return denote.CheckReport
 local function build_report(notes, matches)
+  local ui = require("denote.ui")
   local linked, broken, known, self_ids = {}, {}, {}, {}
+  local lines_cache, code_cache = {}, {}
   for _, m in ipairs(matches) do
     local self_id = self_ids[m.file]
     if self_id == nil then
       self_id = naming.retrieve_identifier(m.file) or false
       self_ids[m.file] = self_id
     end
-    for _, link in ipairs(links.parse_line(m.text, m.lnum)) do
-      local id = link.kind == "id" and link.identifier or nil
-      if id then
-        if known[id] == nil then
-          known[id] = files.has_id(id)
-        end
-        if id ~= self_id then
-          linked[id] = true
-        end
-        if not known[id] then
-          broken[#broken + 1] = { file = m.file, lnum = m.lnum, col = 1, identifier = id }
+    local flines = lines_cache[m.file]
+    if flines == nil then
+      flines = file_lines(m.file)
+      lines_cache[m.file] = flines
+      local ft = frontmatter.detect_file_type(m.file, flines)
+      code_cache[m.file] = ui.code_block_lines(flines, ft)
+    end
+    if not code_cache[m.file][m.lnum] then
+      local raw_line = flines[m.lnum] or m.text
+      for _, link in ipairs(links.parse_line(m.text, m.lnum)) do
+        local id = link.kind == "id" and link.identifier or nil
+        if id then
+          if known[id] == nil then
+            known[id] = files.has_id(id)
+          end
+          if id ~= self_id then
+            linked[id] = true
+          end
+          if not known[id] then
+            local col = raw_line:find(link.raw, 1, true) or m.col or 1
+            broken[#broken + 1] = { file = m.file, lnum = m.lnum, col = col, identifier = id }
+          end
         end
       end
     end
@@ -168,21 +258,29 @@ end
 
 --- Scan every note for broken links and orphans.
 --- Without `on_done` returns the report directly; with it, runs asynchronously.
----@param opts? { quickfix?: boolean, orphans?: boolean }
+---@param opts? { quickfix?: boolean, orphans?: boolean, sync?: boolean }
 ---@param on_done? fun(report: denote.CheckReport)
 ---@return denote.CheckReport|denote.SearchHandle
 function M.check(opts, on_done)
   opts = opts or {}
   local notes = files.list({ denote_only = true })
-  local text_notes = vim.tbl_filter(function(p)
-    return files.is_text_file(p)
-  end, notes)
+  local dirs = files.search_dirs()
+  local seen_text, text_notes = {}, {}
+  for _, d in ipairs(dirs) do
+    for _, p in ipairs(files.list({ dir = d, denote_only = true, text_only = true })) do
+      local norm = utils.normalize(p)
+      if not seen_text[norm] then
+        seen_text[norm] = true
+        text_notes[#text_notes + 1] = p
+      end
+    end
+  end
   local spec = {
     pattern = "denote:",
     fixed = true,
     case = "sensitive",
     files = text_notes,
-    root = config.directory(),
+    root = #dirs == 1 and dirs[1] or nil,
   }
 
   local function present(report)
@@ -218,7 +316,7 @@ function M.check(opts, on_done)
   end
 
   local search = require("denote.search")
-  if not on_done and opts.quickfix == false then
+  if opts.sync or (not on_done and opts.quickfix == false) then
     return build_report(notes, search.run(spec) --[[@as denote.SearchMatch[] ]])
   end
   return search.run(spec, function(matches)

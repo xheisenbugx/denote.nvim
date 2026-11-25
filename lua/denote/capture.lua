@@ -36,6 +36,7 @@ M.default_specifiers = "%l\n%i\n%?"
 ---@field origin? denote.CaptureOrigin Where the capture was started from
 ---@field region? string Text for `%i`
 ---@field answers? table<string, string> Prompt answers keyed by prompt name (pre-supplied or collected)
+---@field prompt_order? { name: string, default?: string }[] Prompt order shared across title/signature/body backreferences
 ---@field syntax? "org"|"markdown"|"text" Link syntax of the target note (for `%a`/`%l`)
 ---@field target_dir? string Directory of the target note (relative Markdown links)
 ---@field date? integer Unix timestamp for `%t`/`%T`/`%u`/`%U` (default: now)
@@ -89,8 +90,11 @@ local function tokenize(line)
     elseif nx == "^" and line:sub(i + 2, i + 2) == "{" and line:find("}", i + 3, true) then
       local close = line:find("}", i + 3, true)
       flush()
-      local parts = vim.split(line:sub(i + 3, close - 1), "|", { plain = true })
-      tokens[#tokens + 1] = { kind = "prompt", name = parts[1], default = parts[2] }
+      local inside = line:sub(i + 3, close - 1)
+      local sep = inside:find("|", 1, true)
+      local name = sep and inside:sub(1, sep - 1) or inside
+      local default = sep and inside:sub(sep + 1) or nil
+      tokens[#tokens + 1] = { kind = "prompt", name = name, default = default }
       i = close + 1
     elseif nx == "\\" and line:sub(i + 2, i + 2):match("%d") then
       flush()
@@ -128,6 +132,29 @@ function M.prompts(template)
   return out
 end
 
+--- Return ordered distinct prompts across multiple template strings.
+---@param templates (string|nil)[]
+---@return { name: string, default?: string }[]
+local function collect_prompts(templates)
+  local keys = {}
+  for k in pairs(templates) do
+    if type(k) == "number" then
+      keys[#keys + 1] = k
+    end
+  end
+  table.sort(keys)
+  local out, seen = {}, {}
+  for _, k in ipairs(keys) do
+    for _, p in ipairs(M.prompts(templates[k])) do
+      if not seen[p.name] then
+        seen[p.name] = true
+        out[#out + 1] = p
+      end
+    end
+  end
+  return out
+end
+
 --- Ask (asynchronously, via `vim.ui.input`) every `%^{...}` prompt of `templates` that has no
 --- answer in `answers` yet, then call `done(answers)`. Cancelling a prompt aborts. When nothing
 --- needs asking (or the prompts complete synchronously), `done`'s result is returned.
@@ -136,13 +163,10 @@ end
 ---@param done fun(answers: table<string, string>): any
 ---@return any
 function M.ask(templates, answers, done)
-  local pending, seen = {}, {}
-  for i = 1, table.maxn(templates) do
-    for _, p in ipairs(M.prompts(templates[i])) do
-      if not seen[p.name] and answers[p.name] == nil then
-        seen[p.name] = true
-        pending[#pending + 1] = p
-      end
+  local pending = {}
+  for _, p in ipairs(collect_prompts(templates)) do
+    if answers[p.name] == nil then
+      pending[#pending + 1] = p
     end
   end
   if #pending == 0 then
@@ -267,7 +291,7 @@ end
 function M.expand_sync(template, ctx)
   ctx = ctx or {}
   local answers = ctx.answers or {}
-  local order = M.prompts(template)
+  local order = ctx.prompt_order or M.prompts(template)
   local out, total, cursor, first = {}, 0, nil, true
   for _, line in ipairs(vim.split(template or "", "\n", { plain = true })) do
     local pieces, len = {}, 0
@@ -465,13 +489,24 @@ function M.append(path, text, cursor, opts)
     save = (not open) or config.opts.save_buffer_after_creation
   end
   if bufnr then
-    vim.api.nvim_buf_set_lines(bufnr, #old_lines == 0 and 0 or #old_lines, -1, false, {
-      unpack(new_lines, #old_lines + 1),
-    })
+    local was_modified = vim.bo[bufnr].modified
+    if vim.bo[bufnr].modifiable then
+      vim.api.nvim_buf_set_lines(
+        bufnr,
+        #old_lines == 0 and 0 or #old_lines,
+        -1,
+        false,
+        vim.list_slice(new_lines, #old_lines + 1)
+      )
+    end
     if save then
-      vim.api.nvim_buf_call(bufnr, function()
-        vim.cmd("silent write")
-      end)
+      if not open and was_modified and opts.save == nil then
+        utils.warn("Appended to modified buffer; run :w to save")
+      else
+        vim.api.nvim_buf_call(bufnr, function()
+          vim.cmd("silent write")
+        end)
+      end
     end
     if open then
       pcall(vim.api.nvim_win_set_cursor, 0, pos)
@@ -533,6 +568,7 @@ function M.run(entry, ctx, opts)
 
   local title_t = call_or(entry.title, ctx)
   local sig_t = call_or(entry.signature, ctx)
+  ctx.prompt_order = collect_prompts({ title_t, sig_t, body })
   local function finish()
     local function inline(s)
       if s == nil then
@@ -561,6 +597,84 @@ function M.run(entry, ctx, opts)
     return finish()
   end
   return M.ask({ title_t, sig_t, body }, ctx.answers, finish)
+end
+
+--- Open a single-key centered float for capture templates (like Org's capture dispatcher).
+---@param list denote.CaptureTemplate[]
+---@param on_pick fun(entry: denote.CaptureTemplate)
+---@return integer win
+function M.open_dispatch(list, on_pick)
+  require("denote.ui").ensure_highlights()
+  local lines = {}
+  local width = 26
+  for _, entry in ipairs(list) do
+    local line = string.format("  [%s]  %s", entry.key, entry.description or entry.key)
+    lines[#lines + 1] = line
+    width = math.max(width, vim.fn.strdisplaywidth(line) + 2)
+  end
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+
+  local ui = vim.api.nvim_list_uis()[1]
+  local cols = ui and ui.width or 80
+  local rows = ui and ui.height or 24
+  local win_w = math.max(1, math.min(width, cols - 4))
+  local win_h = math.max(1, math.min(#lines, rows - 4))
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = win_w,
+    height = win_h,
+    row = math.max(0, math.floor((rows - win_h) / 2)),
+    col = math.max(0, math.floor((cols - win_w) / 2)),
+    style = "minimal",
+    border = "rounded",
+    title = " Denote Capture ",
+    title_pos = "center",
+    footer = " press key · q/Esc cancel ",
+    footer_pos = "center",
+  })
+
+  local ns = vim.api.nvim_create_namespace("denote_capture_dispatch")
+  for i, entry in ipairs(list) do
+    utils.add_highlight(buf, ns, "DenoteIdentifier", i - 1, 2, 2 + #entry.key + 2)
+    utils.add_highlight(buf, ns, "DenoteTitle", i - 1, 2 + #entry.key + 4, -1)
+  end
+
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  for _, k in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", k, close, { buffer = buf, nowait = true, silent = true })
+  end
+  for _, entry in ipairs(list) do
+    vim.keymap.set("n", entry.key, function()
+      close()
+      on_pick(entry)
+    end, { buffer = buf, nowait = true, silent = true })
+  end
+  return win
+end
+
+--- Return true when `list` can use the single-key capture menu.
+---@param list denote.CaptureTemplate[]
+---@return boolean
+local function can_single_key(list)
+  if config.opts.capture and config.opts.capture.picker == true then
+    return false
+  end
+  local seen = {}
+  for _, entry in ipairs(list) do
+    local k = entry.key
+    if type(k) ~= "string" or #k ~= 1 or k:match("%s") or k == "q" or seen[k] then
+      return false
+    end
+    seen[k] = true
+  end
+  return true
 end
 
 ---@class denote.CaptureOpts
@@ -609,6 +723,9 @@ function M.capture(opts)
   end
   if #list == 1 then
     return go(list[1])
+  end
+  if can_single_key(list) then
+    return M.open_dispatch(list, go)
   end
   local items = {}
   for i, entry in ipairs(list) do

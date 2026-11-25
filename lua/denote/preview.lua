@@ -96,23 +96,24 @@ function M.build(path, search)
   return vim.list_extend(header, body), filetype
 end
 
-local current = { win = nil, buf = nil }
+local current = { win = nil, buf = nil, target = nil, origin_win = nil }
 
 --- Close the preview window if open.
 function M.close()
+  pcall(vim.api.nvim_clear_autocmds, { group = "denote_preview_close" })
   if current.win and vim.api.nvim_win_is_valid(current.win) then
     vim.api.nvim_win_close(current.win, true)
   end
-  current.win, current.buf = nil, nil
+  current.win, current.buf, current.target, current.origin_win = nil, nil, nil, nil
 end
 
 --- Preview the Denote link under the cursor (or the given link) in a floating window.
 ---@param link? denote.Link
 ---@return integer|nil win
 function M.open(link)
-  -- Second press focuses an existing preview (like LSP hover)
-  if current.win and vim.api.nvim_win_is_valid(current.win) then
-    vim.api.nvim_set_current_win(current.win)
+  require("denote.ui").ensure_highlights()
+  local caller_win = vim.api.nvim_get_current_win()
+  if current.win and vim.api.nvim_win_is_valid(current.win) and caller_win == current.win then
     return current.win
   end
 
@@ -121,6 +122,19 @@ function M.open(link)
     utils.notify("No Denote link under cursor")
     return nil
   end
+
+  -- Second press on the same link focuses the existing preview (like LSP hover)
+  if
+    current.win
+    and vim.api.nvim_win_is_valid(current.win)
+    and current.origin_win == caller_win
+    and current.target == link.target
+  then
+    vim.api.nvim_set_current_win(current.win)
+    return current.win
+  end
+
+  M.close()
 
   local lines, filetype, path
   if link.kind == "id" then
@@ -141,11 +155,14 @@ function M.open(link)
   end
 
   local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = filetype
   vim.b[buf].denote_preview_path = path
+  vim.b[buf].denote_preview_target = link.target
+  vim.bo[buf].filetype = filetype
 
   local ns = vim.api.nvim_create_namespace("denote_preview")
   utils.add_highlight(buf, ns, "DenoteTitle", 0, 0, -1)
@@ -171,28 +188,48 @@ function M.open(link)
   })
   vim.wo[win].wrap = true
   vim.wo[win].conceallevel = 2
-  current.win, current.buf = win, buf
+  current.win, current.buf, current.target, current.origin_win = win, buf, link.target, caller_win
 
   for _, k in ipairs({ "q", "<Esc>" }) do
     vim.keymap.set("n", k, M.close, { buffer = buf, nowait = true, desc = "denote: close preview" })
   end
   vim.keymap.set("n", "<CR>", function()
-    local target = vim.b[buf].denote_preview_path
+    local target = vim.b[buf].denote_preview_target
+    local owin = current.origin_win
     M.close()
+    if owin and vim.api.nvim_win_is_valid(owin) then
+      vim.api.nvim_set_current_win(owin)
+    end
     if target then
-      utils.open_file(target)
+      links.follow_target(target)
     end
   end, { buffer = buf, nowait = true, desc = "denote: open previewed note" })
 
-  -- Close when the cursor moves in the originating window (like LSP hover)
+  -- Close when the cursor moves in the originating buffer or focus moves away from origin/preview
   local origin = vim.api.nvim_get_current_buf()
+  local au = vim.api.nvim_create_augroup("denote_preview_close", { clear = true })
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "InsertEnter" }, {
+    group = au,
     buffer = origin,
     once = true,
     callback = function()
       if vim.api.nvim_get_current_win() ~= current.win then
         M.close()
       end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+    group = au,
+    buffer = origin,
+    callback = function()
+      vim.schedule(function()
+        if current.win and vim.api.nvim_win_is_valid(current.win) then
+          local cur_w = vim.api.nvim_get_current_win()
+          if cur_w ~= current.win and cur_w ~= current.origin_win then
+            M.close()
+          end
+        end
+      end)
     end,
   })
 

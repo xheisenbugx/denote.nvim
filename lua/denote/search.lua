@@ -31,6 +31,7 @@ local M = {}
 ---@field pattern string Regex (or literal string with `fixed = true`)
 ---@field files string[] Candidate files (only matches inside these are returned)
 ---@field fixed? boolean Treat `pattern` as a literal string
+---@field word? boolean Require word boundaries around matches
 ---@field case? 'smart'|'sensitive'|'insensitive' Default "smart"
 ---@field root? string Directory to hand to `rg` when there are many candidates
 
@@ -62,7 +63,17 @@ local function is_case_sensitive(spec)
   elseif case == "insensitive" then
     return false
   end
-  return spec.pattern:find("%u") ~= nil
+  local pat = spec.fixed and spec.pattern or spec.pattern:gsub("\\\\", ""):gsub("\\.", "")
+  return pat:find("%u") ~= nil
+end
+
+---@param b integer|nil
+---@return boolean
+local function is_word_byte(b)
+  if not b then
+    return false
+  end
+  return (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 95
 end
 
 --- Build a line matcher for the pure-Lua path. Returns fun(line): col|nil.
@@ -72,14 +83,34 @@ function M.matcher(spec)
   local sensitive = is_case_sensitive(spec)
   if spec.fixed then
     local needle = sensitive and spec.pattern or spec.pattern:lower()
+    if not spec.word then
+      return function(line)
+        return (sensitive and line or line:lower()):find(needle, 1, true)
+      end
+    end
     return function(line)
-      return (sensitive and line or line:lower()):find(needle, 1, true)
+      local hay = sensitive and line or line:lower()
+      local init = 1
+      while true do
+        local s, e = hay:find(needle, init, true)
+        if not s then
+          return nil
+        end
+        if
+          not is_word_byte(s > 1 and hay:byte(s - 1) or nil) and not is_word_byte(e < #hay and hay:byte(e + 1) or nil)
+        then
+          return s
+        end
+        init = s + 1
+      end
     end
   end
   local case_flag = sensitive and "\\C" or "\\c"
-  local ok_re, re = pcall(vim.regex, "\\v" .. case_flag .. spec.pattern)
+  local pat_v = spec.word and ("\\<(" .. spec.pattern .. ")\\>") or spec.pattern
+  local pat_m = spec.word and ("\\<\\(" .. spec.pattern .. "\\)\\>") or spec.pattern
+  local ok_re, re = pcall(vim.regex, "\\v" .. case_flag .. pat_v)
   if not ok_re then
-    ok_re, re = pcall(vim.regex, case_flag .. spec.pattern)
+    ok_re, re = pcall(vim.regex, case_flag .. pat_m)
   end
   if ok_re and re then
     return function(line)
@@ -137,10 +168,48 @@ local function lua_search(spec, paths, buffers)
   local out = {}
   for _, path in ipairs(paths) do
     local bufnr = buffers[path]
-    local lines = bufnr and vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) or utils.read_lines(path)
+    local lines
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+      lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    else
+      lines = utils.read_lines(path)
+    end
     scan_lines(lines, path, match, out)
   end
   return out
+end
+
+--- Convert a simple anchored Lua directory pattern (e.g. `^%.git$`) to a literal name for `rg --glob`.
+---@param pat string
+---@return string|nil
+local function glob_from_lua_pattern(pat)
+  local inner = pat:match("^%^(.+)%$$")
+  if not inner then
+    return nil
+  end
+  local chars = {}
+  local i, n = 1, #inner
+  while i <= n do
+    local ch = inner:sub(i, i)
+    if ch == "%" then
+      local nx = inner:sub(i + 1, i + 1)
+      if nx == "" or nx:match("[%w]") then
+        return nil
+      end
+      if nx == "*" or nx == "?" or nx == "[" or nx == "]" or nx == "{" or nx == "}" or nx == "!" then
+        return nil
+      end
+      chars[#chars + 1] = nx
+      i = i + 2
+    elseif ch:match("[%^%$%(%)%.%[%]%*%+%-%?%{%}]") then
+      return nil
+    else
+      chars[#chars + 1] = ch
+      i = i + 1
+    end
+  end
+  local name = table.concat(chars)
+  return name ~= "" and name or nil
 end
 
 --- Above this many candidates, `rg` searches the root directory instead of an explicit file list.
@@ -162,14 +231,28 @@ local function rg_command(spec)
   if spec.fixed then
     cmd[#cmd + 1] = "--fixed-strings"
   end
+  if spec.word then
+    cmd[#cmd + 1] = "--word-regexp"
+  end
   local case = spec.case or "smart"
   cmd[#cmd + 1] = case == "sensitive" and "--case-sensitive"
     or case == "insensitive" and "--ignore-case"
     or "--smart-case"
+  local use_root = spec.root and #spec.files > M.MAX_EXPLICIT_FILES
+  if use_root then
+    cmd[#cmd + 1] = "--follow"
+    for _, pat in ipairs(config.opts.excluded_directories_patterns or {}) do
+      local dir_name = glob_from_lua_pattern(pat)
+      if dir_name then
+        cmd[#cmd + 1] = "--glob"
+        cmd[#cmd + 1] = "!" .. dir_name
+      end
+    end
+  end
   cmd[#cmd + 1] = "-e"
   cmd[#cmd + 1] = spec.pattern
   cmd[#cmd + 1] = "--"
-  if spec.root and #spec.files > M.MAX_EXPLICIT_FILES then
+  if use_root then
     cmd[#cmd + 1] = spec.root
   else
     vim.list_extend(cmd, spec.files)

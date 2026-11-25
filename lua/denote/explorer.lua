@@ -24,7 +24,9 @@ local ns = vim.api.nvim_create_namespace("denote_explorer")
 ---@return integer bufnr
 function M.open(opts)
   opts = opts or {}
-  local origin_buf = vim.api.nvim_get_current_buf()
+  require("denote.ui").ensure_highlights()
+  local cur_buf = vim.api.nvim_get_current_buf()
+  local origin_buf = vim.bo[cur_buf].filetype ~= "denote-explorer" and cur_buf or nil
   local default_comp = config.opts.sort_dired_default_sort_component or "identifier"
   local default_rev = config.opts.sort_dired_default_reverse_sort
   if default_rev == nil then
@@ -43,12 +45,24 @@ function M.open(opts)
     rows = {}, -- { [lnum] = path }
   }
 
+  local buf_name = "denote://explorer/" .. vim.fn.fnamemodify(state.dir, ":t")
+  local old_bufs = {}
+  local existing_win
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == buf_name then
+      local w = vim.fn.bufwinid(b)
+      if w ~= -1 and vim.api.nvim_win_is_valid(w) then
+        existing_win = w
+      end
+      old_bufs[#old_bufs + 1] = b
+    end
+  end
+
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = "denote-explorer"
-  pcall(vim.api.nvim_buf_set_name, buf, "denote://explorer/" .. vim.fn.fnamemodify(state.dir, ":t"))
 
   local function collect_files()
     local list = files.list({
@@ -172,14 +186,39 @@ function M.open(opts)
     end
   end
 
-  vim.api.nvim_win_set_buf(0, buf)
+  if existing_win and vim.api.nvim_win_is_valid(existing_win) then
+    vim.api.nvim_set_current_win(existing_win)
+    vim.api.nvim_win_set_buf(existing_win, buf)
+  else
+    vim.api.nvim_win_set_buf(0, buf)
+  end
+  for _, old_b in ipairs(old_bufs) do
+    if vim.api.nvim_buf_is_valid(old_b) then
+      pcall(vim.api.nvim_buf_delete, old_b, { force = true })
+    end
+  end
+  pcall(vim.api.nvim_buf_set_name, buf, buf_name)
   render()
   local init_win = vim.fn.bufwinid(buf)
   if init_win ~= -1 and vim.api.nvim_win_is_valid(init_win) then
     pcall(vim.api.nvim_win_set_cursor, init_win, { math.min(3, vim.api.nvim_buf_line_count(buf)), 0 })
   end
 
-  -- Auto-refresh Explorer whenever a Denote note is renamed or created anywhere
+  -- Auto-refresh Explorer whenever a Denote note is renamed or created anywhere (coalesced)
+  local render_pending = false
+  local function schedule_render()
+    if render_pending then
+      return
+    end
+    render_pending = true
+    vim.schedule(function()
+      render_pending = false
+      if vim.api.nvim_buf_is_valid(buf) then
+        render()
+      end
+    end)
+  end
+
   local exp_augroup = vim.api.nvim_create_augroup("denote_explorer_" .. buf, { clear = true })
   vim.api.nvim_create_autocmd("User", {
     group = exp_augroup,
@@ -192,7 +231,7 @@ function M.open(opts)
       if ev.data and ev.data.old_path and state.marked[ev.data.old_path] then
         state.marked[ev.data.old_path] = nil
       end
-      vim.schedule(render)
+      schedule_render()
     end,
   })
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -353,10 +392,14 @@ function M.open(opts)
   end, "reverse sort order")
 
   map("G", function()
-    local targets = target_files()
-    if #targets == 0 then
-      targets = collect_files()
+    local marked_list = {}
+    for p, v in pairs(state.marked) do
+      if v and utils.exists(p) then
+        marked_list[#marked_list + 1] = p
+      end
     end
+    table.sort(marked_list)
+    local targets = #marked_list > 0 and marked_list or collect_files()
     require("denote.query").grep(nil, { dir = state.dir, files = targets })
   end, "grep marked / visible files")
 
@@ -366,32 +409,42 @@ function M.open(opts)
       return
     end
     local links = require("denote.links")
-    local syntax = vim.api.nvim_buf_is_valid(origin_buf) and links.buffer_syntax(origin_buf) or "markdown"
+    local obuf = (origin_buf and vim.api.nvim_buf_is_valid(origin_buf)) and origin_buf or nil
+    local syntax = obuf and links.buffer_syntax(obuf) or "markdown"
+    local origin_name = obuf and vim.api.nvim_buf_get_name(obuf) or ""
+    local from_dir = origin_name ~= "" and vim.fn.fnamemodify(utils.normalize(origin_name), ":h") or config.directory()
     local out = {}
     for _, p in ipairs(targets) do
       local id = naming.retrieve_identifier(p)
       if id then
-        out[#out + 1] = "- " .. links.format_link(id, links.default_description(p), { syntax = syntax, file_path = p })
+        out[#out + 1] = "- "
+          .. links.format_link(
+            id,
+            links.default_description(p),
+            { syntax = syntax, file_path = p, from_dir = from_dir }
+          )
       end
     end
     if #out == 0 then
       return
     end
-    if vim.api.nvim_buf_is_valid(origin_buf) and vim.bo[origin_buf].buftype == "" and vim.bo[origin_buf].modifiable then
-      local lc = vim.api.nvim_buf_line_count(origin_buf)
-      vim.api.nvim_buf_set_lines(origin_buf, lc, lc, false, out)
-      utils.notify(
-        string.format(
-          "Inserted %d link(s) into %s",
-          #out,
-          vim.fn.fnamemodify(vim.api.nvim_buf_get_name(origin_buf), ":t")
-        )
-      )
+    if obuf and vim.bo[obuf].buftype == "" and vim.bo[obuf].modifiable then
+      local lc = vim.api.nvim_buf_line_count(obuf)
+      vim.api.nvim_buf_set_lines(obuf, lc, lc, false, out)
+      utils.notify(string.format("Inserted %d link(s) into %s", #out, vim.fn.fnamemodify(origin_name, ":t")))
     else
       vim.fn.setreg('"', table.concat(out, "\n") .. "\n")
       utils.notify(string.format("Yanked %d link(s) to default register", #out))
     end
   end, "link marked notes into previous buffer")
+
+  local function finish_batch(errs)
+    state.marked = {}
+    if #errs > 0 then
+      utils.warn(string.format("%d error(s) during batch rename: %s", #errs, errs[1]))
+    end
+    render()
+  end
 
   map("R", function()
     local targets = target_files()
@@ -428,45 +481,60 @@ function M.open(opts)
         if act == "set_kw" then
           vim.ui.input({ prompt = "Set keywords on marked files: " }, function(input)
             if input ~= nil then
+              local errs = {}
               for _, f in ipairs(targets) do
-                rename.rename_sync({ file = f, keywords = utils.parse_keywords_input(input) })
+                local _, err = rename.rename_sync({ file = f, keywords = utils.parse_keywords_input(input) })
+                if err then
+                  errs[#errs + 1] = err
+                end
               end
-              state.marked = {}
-              render()
+              finish_batch(errs)
             end
           end)
         elseif act == "add_kw" then
           vim.ui.input({ prompt = "Keywords to add: " }, function(input)
             if input and vim.trim(input) ~= "" then
+              local errs = {}
               for _, f in ipairs(targets) do
-                rename.keywords_add(input, f)
+                local _, err = rename.keywords_add(input, f)
+                if err then
+                  errs[#errs + 1] = err
+                end
               end
-              state.marked = {}
-              render()
+              finish_batch(errs)
             end
           end)
         elseif act == "rem_kw" then
           vim.ui.input({ prompt = "Keywords to remove: " }, function(input)
             if input and vim.trim(input) ~= "" then
+              local errs = {}
               for _, f in ipairs(targets) do
-                rename.keywords_remove(input, f)
+                local _, err = rename.keywords_remove(input, f)
+                if err then
+                  errs[#errs + 1] = err
+                end
               end
-              state.marked = {}
-              render()
+              finish_batch(errs)
             end
           end)
         elseif act == "from_fm" then
+          local errs = {}
           for _, f in ipairs(targets) do
-            rename.rename_file_using_front_matter(f)
+            local _, err = rename.rename_file_using_front_matter(f)
+            if err then
+              errs[#errs + 1] = err
+            end
           end
-          state.marked = {}
-          render()
+          finish_batch(errs)
         elseif act == "add_fm" then
+          local errs = {}
           for _, f in ipairs(targets) do
-            rename.add_front_matter(f)
+            local _, err = rename.add_front_matter(f)
+            if err then
+              errs[#errs + 1] = err
+            end
           end
-          state.marked = {}
-          render()
+          finish_batch(errs)
         end
       end,
     })
@@ -481,12 +549,16 @@ function M.open(opts)
       or string.format("Delete %d marked files?", #targets)
     if vim.fn.confirm(msg, "&No\n&Yes", 1) == 2 then
       for _, f in ipairs(targets) do
-        local b = utils.find_buffer(f)
-        if b then
-          pcall(vim.api.nvim_buf_delete, b, { force = true })
+        local ok_rm, rerr = os.remove(f)
+        if ok_rm then
+          local b = utils.find_buffer(f)
+          if b then
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+          end
+          state.marked[f] = nil
+        else
+          utils.error("Failed to delete " .. vim.fn.fnamemodify(f, ":t") .. ": " .. tostring(rerr))
         end
-        os.remove(f)
-        state.marked[f] = nil
       end
       utils.notify_fs_change()
       render()
@@ -513,7 +585,13 @@ function M.open(opts)
   map("g", render, "refresh")
   map("q", function()
     local win = vim.fn.bufwinid(buf)
-    if win ~= -1 and vim.api.nvim_win_is_valid(win) and origin_buf ~= buf and vim.api.nvim_buf_is_valid(origin_buf) then
+    if
+      win ~= -1
+      and vim.api.nvim_win_is_valid(win)
+      and origin_buf
+      and origin_buf ~= buf
+      and vim.api.nvim_buf_is_valid(origin_buf)
+    then
       pcall(vim.api.nvim_win_set_buf, win, origin_buf)
     end
     if vim.api.nvim_buf_is_valid(buf) then

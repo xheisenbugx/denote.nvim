@@ -144,20 +144,20 @@ Browse sequence relatives (`<leader>nzr` — parent, siblings, children), spawn 
 
 | | Area | Highlights |
 | --- | --- | --- |
-| 🏷️ | **File-naming scheme** | Canonical `DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION`, Denote 3.x/4.x reordered components (`@@DATE`), collision-free timestamp IDs, compound extensions (`.org.gpg`, `.md.age`), custom sluggifiers, and arbitrary non-text files (PDFs, images) |
-| 📄 | **Front matter & templates** | Built-in `org`, `markdown-yaml` (inline & block YAML lists), `markdown-toml`, and `text` formats, custom file types, named body templates (static strings or Lua functions), and `:DenoteRegion` with automatic code block wrapping |
+| 🏷️ | **File-naming scheme** | Canonical `DATE==SIGNATURE--TITLE__KEYWORDS.EXTENSION`, Denote 3.x/4.x reordered components (`@@DATE`, free-form `@@id`), collision-free timestamp IDs, compound extensions (`.org.gpg`, `.md.age`), custom sluggifiers, and arbitrary non-text files (PDFs, images) |
+| 📄 | **Front matter & templates** | Built-in `org`, `markdown-yaml` (inline & block YAML lists), `markdown-toml` (inline & multiline arrays), and `text` formats, custom `file_types` (with optional `parse`/`rewrite` hooks), named body templates (static strings or Lua functions), and `:DenoteRegion` with dynamic code block wrapping |
 | 🔄 | **Two-way renaming** | Rename any file (`:Denote rename`, `rename_title`, `rename_keywords`, `rename_signature`, `rename_date`) with in-place front matter updates that preserve custom fields; sync filenames from front matter (`:Denote rename_from_front_matter`); quick `keywords_add` / `keywords_remove`; optional `auto_rename_on_save` |
 | 🔗 | **Links & heading links** | Immutable `denote:ID` links in Org, Markdown (`denote`, `wiki`, or `relative` styles), and plain text; `link_or_create`, `link_after_creating`, `add_links` (bulk list matching regexp), `find_link`, direct Org (`::*Heading`, `::#custom-id`) & Markdown (`::#heading-slug`) heading links, plus lossless conversion between `denote:` and relative file links |
 | 🔙 | **Backlinks** | Interactive, asynchronous split buffer (`:Denote backlinks`) grouped by file with line numbers and matching context, toggleable context/filenames-only (`f`), plus fuzzy jump-to-line picker (`:Denote find_backlink`); accelerated by `rg` when installed |
-| 🔍 | **Grep & Query links (Denote 4.0)** | Fast, non-blocking full-text search (`:Denote grep`, accelerated by `rg` with pure-Lua fallback and identical smart-case semantics) in an interactive narrowing buffer (`f` keep, `x` exclude, `c` clear); live `denote:query-contents:` and `denote:query-filenames:` links |
-| 🩺 | **Diagnostics, preview & reports** | Broken links reported via `vim.diagnostic` (`]d`, quickfix, Trouble); `K` hover preview of the linked note; `:Denote unlinked_mentions` + `:Denote link_mention`; `:Denote check` for broken links & orphan notes |
+| 🔍 | **Grep & Query links (Denote 4.0)** | Fast, non-blocking full-text search (`:Denote grep`, accelerated by `rg` with pure-Lua fallback and identical smart-case semantics) in an interactive narrowing buffer (`f` keep, `x` exclude, `k`/`K` keywords, `/` focus, `S` sort, `c` clear); live `denote:query-contents:` and `denote:query-filenames:` links |
+| 🩺 | **Diagnostics, preview & reports** | Broken links reported via `vim.diagnostic` (`]d`, quickfix, Trouble; skips code blocks); `K` hover preview of the linked note; `:Denote unlinked_mentions` + `:Denote link_mention`; `:Denote check` for broken links & orphan notes |
 | ⚡ | **Cached file index** | Directory listings and identifier lookups are cached and revalidated with one `stat` per directory, so large vaults stay snappy (`make bench`) |
 | 🗂️ | **Interactive Explorer** | Dired / `denote-menu` / `denote-sort-dired` buffer with colorized filename components, regexp & keyword filters, sorting by identifier / title / keywords / signature / mtime, reverse order, file marking, single & batch renaming, and deletion |
 | 📓 | **Journal** | Drop-in `denote-journal` support: `:Denote journal [date]` (open existing or create), `journal_new`, and `journal_link`, supporting flexible dates (`yesterday`, `tomorrow`, `-2d`, `2026-11-23`); **daily, weekly (ISO), monthly, or yearly** entries (`journal.interval`, like `denote-journal-interval`) |
 | 📅 | **Journal calendar** | `:Denote journal_calendar` (`<leader>nC`): floating month view highlighting days with entries (`denote-journal-calendar-mode`); `F`/`<CR>` visit, `N` new-or-existing, `h/j/k/l` move, `[`/`]` month, `{`/`}` year, `t` today |
-| 📥 | **Capture templates** | `:Denote capture` (`<leader>nx`, also in visual mode): the Neovim take on `denote-org-capture`, with Org-capture escapes (`%^{Prompt\|default}`, `%i`, `%a`/`%l`, `%x`, `%t`/`%U`, `%?`, …) in capture templates and string `templates`; append to an existing note or today's journal |
-| 🌳 | **Sequences (Folgezettel)** | Drop-in `denote-sequence` support for both **numeric** (`1`, `1=1`, `1=2`, `1=1=1`) and **alphanumeric** (`1`, `1a`, `1b`, `1a1`) schemes: `new_parent`, `new_child`, `new_sibling`, `find_relatives`, `link`, `reparent`, and sequence-aware natural sorting |
-| 🏛️ | **Silos** | Keep isolated note repositories (`silos = { "~/work-notes" }`) or drop a `.denote.json` / `.denote.lua` file in any directory for automatic directory-local overrides (Neovim equivalent of `.dir-locals.el`) |
+| 📥 | **Capture templates** | `:Denote capture` (`<leader>nx`, also in visual mode): single-key dispatch float (or picker) for `denote-org-capture`, with Org-capture escapes (`%^{Prompt\|default}`, `%\N`, `%i`, `%a`/`%l`, `%x`, `%t`/`%U`, `%?`, …) in capture templates and string `templates`; append to an existing note or today's journal |
+| 🌳 | **Sequences (Folgezettel)** | Drop-in `denote-sequence` support for both **numeric** (`1`, `1=1`, `1=2`, `1=1=1`) and **alphanumeric** (`1`, `1a`, `1b`, `1a1`) schemes: `new_parent`, `new_child`, `new_sibling`, `find_relatives`, `link`, recursive `reparent`, and sequence-aware natural sorting |
+| 🏛️ | **Silos** | Keep isolated note repositories (`silos = { "~/work-notes" }`, optional `silos_auto_detect`), or drop a `.denote.json` / trusted `.denote.lua` (`:trust`) file in any directory for directory-local overrides (Neovim equivalent of `.dir-locals.el`) |
 | 🦄 | **org.nvim integration** | Native `denote:` link type (`follow`, `store`, `export`, `face`) + Org dynamic blocks (`denote-links`, `denote-backlinks`, `denote-files`) that work both with `org.nvim` and standalone |
 | 🧩 | **Ecosystem** | Pickers for `snacks.nvim`, `fzf-lua`, `telescope.nvim`, `mini.pick`, and `vim.ui.select`; `blink.cmp` & `nvim-cmp` link completion; `which-key` groups; broken-link highlighting & optional concealment; `denote.statusline()`; `:h denote.nvim`; `:checkhealth denote` |
 
@@ -297,10 +297,11 @@ require("denote").setup({
   -- Picker backend: "auto", "snacks", "fzf-lua", "telescope", "mini", "select"
   picker = "auto",
 
-  -- Isolated silos (also supports per-directory .denote.json / .denote.lua files)
+  -- Isolated silos (also supports per-directory .denote.json / trusted .denote.lua files)
   silos = {
     -- "~/work-notes",
   },
+  silos_auto_detect = false, -- auto-scope directory() to the current buffer's silo
 
   -- Journal (`denote-journal`)
   journal = {
@@ -318,6 +319,7 @@ require("denote").setup({
   -- Capture templates (`denote-org-capture`)
   capture = {
     specifiers = "%l\n%i\n%?", -- body when a capture template has no `template`
+    picker = false, -- true forces fuzzy picker instead of single-key dispatch menu
     templates = {
       -- { key = "n", description = "Note" },
       -- { key = "m", description = "Meeting", title = "Meeting with %^{Who}", keywords = { "meeting" },

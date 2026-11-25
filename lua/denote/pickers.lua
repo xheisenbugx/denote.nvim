@@ -28,18 +28,28 @@ local M = {}
 ---@field on_choice fun(items: denote.PickerItem[], query?: string, how?: string)
 ---@field on_cancel? fun()
 
---- Extract plain text from a PickerItem.
+--- Extract plain display text from a PickerItem (joining its `display` chunks).
+---@param item denote.PickerItem
+---@return string
+function M.item_display_text(item)
+  if item.display and #item.display > 0 then
+    local parts = {}
+    for i, chunk in ipairs(item.display) do
+      parts[i] = chunk[1]
+    end
+    return table.concat(parts)
+  end
+  return item.text or ""
+end
+
+--- Extract plain searchable text from a PickerItem.
 ---@param item denote.PickerItem
 ---@return string
 function M.item_text(item)
   if item.text then
     return item.text
   end
-  local parts = {}
-  for i, chunk in ipairs(item.display or {}) do
-    parts[i] = chunk[1]
-  end
-  return table.concat(parts)
+  return M.item_display_text(item)
 end
 
 --- Resolve the active picker backend name.
@@ -193,26 +203,47 @@ local function pick_telescope(spec)
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
 
+  local has_filenames = false
+  for _, item in ipairs(spec.items) do
+    if item.filename then
+      has_filenames = true
+      break
+    end
+  end
+  local handled = false
+
   pickers
     .new({}, {
       prompt_title = spec.title,
       finder = finders.new_table({
         results = spec.items,
         entry_maker = function(item)
-          local line = M.item_text(item)
           return {
             value = item,
-            display = line,
-            ordinal = line,
+            display = M.item_display_text(item),
+            ordinal = M.item_text(item),
             filename = item.filename,
             lnum = item.lnum,
           }
         end,
       }),
       sorter = conf.generic_sorter({}),
-      previewer = spec.preview ~= false and conf.grep_previewer({}) or nil,
+      previewer = (spec.preview ~= false and has_filenames) and conf.grep_previewer({}) or nil,
       attach_mappings = function(prompt_bufnr, map)
+        if spec.on_cancel then
+          vim.api.nvim_create_autocmd("BufWipeout", {
+            buffer = prompt_bufnr,
+            once = true,
+            callback = function()
+              if not handled then
+                vim.schedule(spec.on_cancel)
+              end
+            end,
+          })
+        end
+
         local function submit(how)
+          handled = true
           local picker = action_state.get_current_picker(prompt_bufnr)
           local query = action_state.get_current_line()
           local multi = picker:get_multi_selection()
@@ -228,7 +259,9 @@ local function pick_telescope(spec)
             end
           end
           actions.close(prompt_bufnr)
-          spec.on_choice(chosen, query, how)
+          vim.schedule(function()
+            spec.on_choice(chosen, query, how)
+          end)
         end
 
         actions.select_default:replace(function()
@@ -242,9 +275,12 @@ local function pick_telescope(spec)
         end)
         if spec.allow_query then
           map({ "i", "n" }, "<M-CR>", function()
+            handled = true
             local query = action_state.get_current_line()
             actions.close(prompt_bufnr)
-            spec.on_choice({}, query, "edit")
+            vim.schedule(function()
+              spec.on_choice({}, query, "edit")
+            end)
           end)
         end
         return true
@@ -259,9 +295,43 @@ local function pick_fzf_lua(spec)
   local lines = {}
   local map = {}
   for idx, item in ipairs(spec.items) do
-    local key = string.format("%d\t%s", idx, M.item_text(item))
+    local key = string.format("%d\t%s", idx, M.item_display_text(item))
     lines[idx] = key
     map[key] = item
+  end
+  local handled = false
+  local function choose(selected, opts, how)
+    handled = true
+    local chosen = {}
+    for _, line in ipairs(selected or {}) do
+      if map[line] then
+        chosen[#chosen + 1] = map[line]
+      end
+    end
+    local query = opts and opts.last_query or ""
+    vim.schedule(function()
+      spec.on_choice(chosen, query, how)
+    end)
+  end
+  local actions = {
+    ["default"] = function(selected, opts)
+      choose(selected, opts, "edit")
+    end,
+    ["ctrl-s"] = function(selected, opts)
+      choose(selected, opts, "split")
+    end,
+    ["ctrl-v"] = function(selected, opts)
+      choose(selected, opts, "vsplit")
+    end,
+  }
+  if spec.allow_query then
+    actions["alt-enter"] = function(_, opts)
+      handled = true
+      local query = opts and opts.last_query or ""
+      vim.schedule(function()
+        spec.on_choice({}, query, "edit")
+      end)
+    end
   end
   fzf.fzf_exec(lines, {
     prompt = spec.title .. "> ",
@@ -270,35 +340,14 @@ local function pick_fzf_lua(spec)
       ["--with-nth"] = "2..",
       ["--multi"] = spec.multi and "" or nil,
     },
-    actions = {
-      ["default"] = function(selected, opts)
-        local chosen = {}
-        for _, line in ipairs(selected or {}) do
-          if map[line] then
-            chosen[#chosen + 1] = map[line]
-          end
+    winopts = {
+      on_close = function()
+        if not handled and spec.on_cancel then
+          vim.schedule(spec.on_cancel)
         end
-        spec.on_choice(chosen, opts and opts.last_query or "", "edit")
-      end,
-      ["ctrl-s"] = function(selected, opts)
-        local chosen = {}
-        for _, line in ipairs(selected or {}) do
-          if map[line] then
-            chosen[#chosen + 1] = map[line]
-          end
-        end
-        spec.on_choice(chosen, opts and opts.last_query or "", "split")
-      end,
-      ["ctrl-v"] = function(selected, opts)
-        local chosen = {}
-        for _, line in ipairs(selected or {}) do
-          if map[line] then
-            chosen[#chosen + 1] = map[line]
-          end
-        end
-        spec.on_choice(chosen, opts and opts.last_query or "", "vsplit")
       end,
     },
+    actions = actions,
   })
 end
 
@@ -321,7 +370,7 @@ local function pick_mini(spec)
       name = spec.title,
       items = items,
       show = function(buf_id, arr, query)
-        local str_items = vim.tbl_map(M.item_text, arr)
+        local str_items = vim.tbl_map(M.item_display_text, arr)
         mini_pick.default_show(buf_id, str_items, query)
       end,
     },
@@ -378,7 +427,7 @@ local function pick_select(spec)
   vim.ui.select(list, {
     prompt = spec.title .. ": ",
     format_item = function(item)
-      return M.item_text(item)
+      return M.item_display_text(item)
     end,
   }, function(choice)
     if not choice then
@@ -405,26 +454,19 @@ end
 ---@param spec denote.PickerSpec
 function M.pick(spec)
   local backend = M.resolve_backend()
-  if backend == "snacks" then
-    local ok = pcall(pick_snacks, spec)
+  local runners = {
+    snacks = pick_snacks,
+    ["fzf-lua"] = pick_fzf_lua,
+    telescope = pick_telescope,
+    mini = pick_mini,
+  }
+  local fn = runners[backend]
+  if fn then
+    local ok, err = pcall(fn, spec)
     if ok then
       return
     end
-  elseif backend == "fzf-lua" then
-    local ok = pcall(pick_fzf_lua, spec)
-    if ok then
-      return
-    end
-  elseif backend == "telescope" then
-    local ok = pcall(pick_telescope, spec)
-    if ok then
-      return
-    end
-  elseif backend == "mini" then
-    local ok = pcall(pick_mini, spec)
-    if ok then
-      return
-    end
+    utils.warn(string.format("Picker backend %q failed (%s); falling back to vim.ui.select", backend, tostring(err)))
   end
   pick_select(spec)
 end

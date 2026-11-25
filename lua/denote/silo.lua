@@ -10,14 +10,57 @@ local utils = require("denote.utils")
 
 local M = {}
 
+local warned_untrusted = {}
+
+--- Resolve `local_opts.directory` relative to `base_dir` if relative.
+---@param base_dir string
+---@param local_opts table
+---@return string
+local function resolve_silo_dir(base_dir, local_opts)
+  local d = local_opts and local_opts.directory
+  if type(d) ~= "string" or d == "" then
+    return base_dir
+  end
+  if d:sub(1, 1) == "/" or d:sub(1, 1) == "~" or d:match("^%a:[/\\]") then
+    return utils.normalize(d)
+  end
+  return utils.normalize(base_dir .. "/" .. d)
+end
+
+--- Load a `.denote.lua` file only after Neovim's trust check (`vim.secure.read`).
+---@param lua_file string
+---@return table
+local function read_trusted_lua(lua_file)
+  local loader = rawget(_G, "loadstring") or load
+  local src = vim.secure and vim.secure.read and vim.secure.read(lua_file) or nil
+  if type(src) ~= "string" then
+    if not warned_untrusted[lua_file] then
+      warned_untrusted[lua_file] = true
+      utils.warn("Ignored untrusted .denote.lua (open and run :trust to allow): " .. lua_file)
+    end
+    return {}
+  end
+  local chunk, lerr = loader(src, "@" .. lua_file)
+  if not chunk then
+    utils.warn("Syntax error in " .. lua_file .. ": " .. tostring(lerr))
+    return {}
+  end
+  local ok, data = pcall(chunk)
+  if not ok then
+    utils.warn("Error running " .. lua_file .. ": " .. tostring(data))
+    return {}
+  end
+  return type(data) == "table" and data or {}
+end
+
 --- Return all configured silos (normalized) plus the primary directory.
 ---@return string[]
 function M.list()
   local out = {}
-  local primary =
-    utils.normalize(type(config.opts.directory) == "function" and config.opts.directory() or config.opts.directory)
+  local base = config.base_opts or config.opts
+  local primary = utils.normalize(type(base.directory) == "function" and base.directory() or base.directory)
   out[#out + 1] = primary
-  for _, dir in ipairs(config.opts.silos or {}) do
+  for _, dir in ipairs(base.silos or {}) do
     local norm = utils.normalize(dir)
     if norm ~= "" and not vim.tbl_contains(out, norm) then
       out[#out + 1] = norm
@@ -51,15 +94,12 @@ function M.detect(path)
       local raw = utils.read_file(json_file)
       local ok, data = pcall(vim.json.decode, raw or "{}")
       local local_opts = (ok and type(data) == "table") and data or {}
-      local silo_dir = local_opts.directory and utils.normalize(local_opts.directory) or dir
-      return silo_dir, local_opts
+      return resolve_silo_dir(dir, local_opts), local_opts
     end
     local lua_file = dir .. "/.denote.lua"
     if utils.is_file(lua_file) then
-      local ok, data = pcall(dofile, lua_file)
-      local local_opts = (ok and type(data) == "table") and data or {}
-      local silo_dir = local_opts.directory and utils.normalize(local_opts.directory) or dir
-      return silo_dir, local_opts
+      local local_opts = read_trusted_lua(lua_file)
+      return resolve_silo_dir(dir, local_opts), local_opts
     end
     local parent = vim.fn.fnamemodify(dir, ":h")
     if parent == dir then
@@ -68,11 +108,13 @@ function M.detect(path)
     dir = parent
   end
 
-  -- 2. Check configured silos (longest prefix match)
+  -- 2. Check configured silos (longest prefix match, canonicalized for symlinks)
+  local norm_real = config.canonicalize(norm)
   local best = nil
-  for _, s in ipairs(config.opts.silos or {}) do
-    local sn = utils.normalize(s)
-    if norm == sn or norm:sub(1, #sn + 1) == sn .. "/" then
+  local base = config.base_opts or config.opts
+  for _, s in ipairs(base.silos or {}) do
+    local sn = config.canonicalize(utils.normalize(s))
+    if norm_real == sn or norm_real:sub(1, #sn + 1) == sn .. "/" then
       if not best or #sn > #best then
         best = sn
       end
@@ -94,9 +136,9 @@ function M.with_silo(silo_dir, fn)
   local prev_dir = config.active_directory
   local prev_opts = config.opts
   local norm = utils.normalize(silo_dir)
-  local _, local_opts = M.detect(norm)
+  local resolved_dir, local_opts = M.detect(norm)
 
-  config.active_directory = norm
+  config.active_directory = resolved_dir or norm
   if local_opts then
     config.opts = vim.tbl_deep_extend("force", vim.deepcopy(prev_opts), local_opts)
   end
@@ -111,17 +153,32 @@ function M.with_silo(silo_dir, fn)
   return res
 end
 
---- Switch the active Denote directory for this session.
+--- Switch the active Denote directory for this session (applying any `.denote.json` / trusted
+--- `.denote.lua` overrides on top of the base configuration).
 ---@param silo_dir? string Pass nil to reset to default `config.opts.directory`
 function M.switch(silo_dir)
+  local base = config.base_opts or config.defaults
+  local files = require("denote.files")
+  local backlinks = require("denote.backlinks")
   if not silo_dir or silo_dir == "" then
     config.active_directory = nil
+    config.opts = vim.deepcopy(base)
+    files.invalidate()
+    backlinks.clear_cache()
     utils.notify("Switched to default directory: " .. config.directory())
     return
   end
   local norm = utils.normalize(silo_dir)
-  config.active_directory = norm
-  utils.notify("Switched active silo to: " .. norm)
+  local resolved_dir, local_opts = M.detect(norm)
+  config.active_directory = resolved_dir or norm
+  if local_opts then
+    config.opts = vim.tbl_deep_extend("force", vim.deepcopy(base), local_opts)
+  else
+    config.opts = vim.deepcopy(base)
+  end
+  files.invalidate()
+  backlinks.clear_cache()
+  utils.notify("Switched active silo to: " .. config.directory())
 end
 
 --- Pick a silo interactively and invoke `callback(silo_dir)`.
@@ -133,10 +190,11 @@ function M.pick(callback, title)
   local items = {}
   local active = config.directory()
   for _, dir in ipairs(silos) do
-    local marker = dir == active and "● " or "  "
+    local is_active = config.canonicalize(dir) == active
+    local marker = is_active and "● " or "  "
     items[#items + 1] = {
       display = {
-        { marker, dir == active and "DenoteIdentifier" or "Comment" },
+        { marker, is_active and "DenoteIdentifier" or "Comment" },
         { vim.fn.fnamemodify(dir, ":~"), "DenoteTitle" },
       },
       text = dir,

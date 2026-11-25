@@ -94,21 +94,36 @@ function M.notify_fs_change()
   end
 end
 
---- Write a string to a file atomically / directly.
+local write_seq = 0
+
+--- Write a string to a file atomically via sibling temp file + rename.
 ---@param path string
 ---@param content string
 ---@return boolean, string|nil
 function M.write_file(path, content)
   local parent = vim.fn.fnamemodify(path, ":h")
   if parent ~= "" and not M.is_dir(parent) then
-    M.ensure_dir(parent)
+    if not M.ensure_dir(parent) then
+      return false, "Failed to create directory: " .. parent
+    end
   end
-  local f, err = io.open(path, "wb")
+  write_seq = write_seq + 1
+  local tmp = string.format("%s.denote.tmp.%d.%d", path, write_seq, uv.hrtime())
+  local f, err = io.open(tmp, "wb")
   if not f then
     return false, err
   end
-  f:write(content)
-  f:close()
+  local ok_w, werr = f:write(content)
+  local ok_c, cerr = f:close()
+  if not ok_w or not ok_c then
+    pcall(os.remove, tmp)
+    return false, tostring(werr or cerr or "Write failed")
+  end
+  local ok_mv, merr = uv.fs_rename(tmp, path)
+  if not ok_mv then
+    pcall(os.remove, tmp)
+    return false, tostring(merr or "Rename failed")
+  end
   M.notify_fs_change()
   return true, nil
 end
@@ -246,6 +261,30 @@ function M.matches_pattern(text, query)
   return text:lower():find(query:lower(), 1, true) ~= nil
 end
 
+--- Validate numeric date components and return local Unix timestamp (or nil, err).
+---@param raw string
+---@param y integer
+---@param m integer
+---@param d integer
+---@param H integer
+---@param Mi integer
+---@param S integer
+---@return integer|nil, string|nil
+local function validate_time(raw, y, m, d, H, Mi, S)
+  if m < 1 or m > 12 or d < 1 or d > 31 or H < 0 or H > 23 or Mi < 0 or Mi > 59 or S < 0 or S > 59 then
+    return nil, "Invalid date: " .. raw
+  end
+  local ts = os.time({ year = y, month = m, day = d, hour = H, min = Mi, sec = S })
+  if not ts then
+    return nil, "Invalid date: " .. raw
+  end
+  local dt = os.date("*t", ts) --[[@as osdate]]
+  if dt.year ~= y or dt.month ~= m or dt.day ~= d then
+    return nil, "Invalid date: " .. raw
+  end
+  return ts, nil
+end
+
 --- Parse a flexible user date input into a Unix timestamp (seconds).
 --- Supports:
 --- - number (Unix timestamp)
@@ -255,7 +294,7 @@ end
 --- - "YYYY-MM-DD HH:MM" / "YYYY-MM-DD HH:MM:SS"
 --- - "YYYY-MM-DDTHH:MM:SS" (ISO-8601)
 --- - "today", "yesterday", "tomorrow"
---- - "+Nd" / "-Nd" / "+Nw" / "-Nw"
+--- - "+Nd" / "-Nd" / "+Nw" / "-Nw" / "+Nm" / "-Nm"
 ---@param input? string|integer
 ---@return integer|nil, string|nil
 function M.parse_date(input)
@@ -271,20 +310,26 @@ function M.parse_date(input)
   if low == "today" or low == "now" then
     return now, nil
   elseif low == "yesterday" then
-    return now - 86400, nil
+    local t = os.date("*t", now) --[[@as osdate]]
+    t.day = t.day - 1
+    return os.time(t), nil
   elseif low == "tomorrow" then
-    return now + 86400, nil
+    local t = os.date("*t", now) --[[@as osdate]]
+    t.day = t.day + 1
+    return os.time(t), nil
   end
 
   local sign, num, unit = low:match("^([%+%-])(%d+)([dwm])$")
   if sign then
     local n = tonumber(num) * (sign == "-" and -1 or 1)
+    local t = os.date("*t", now) --[[@as osdate]]
     if unit == "d" then
-      return now + n * 86400, nil
+      t.day = t.day + n
+      return os.time(t), nil
     elseif unit == "w" then
-      return now + n * 7 * 86400, nil
+      t.day = t.day + n * 7
+      return os.time(t), nil
     elseif unit == "m" then
-      local t = os.date("*t", now) --[[@as osdate]]
       t.month = t.month + n
       return os.time(t), nil
     end
@@ -293,56 +338,56 @@ function M.parse_date(input)
   -- Denote identifier: 20261123T191500
   local y, m, d, H, Mi, S = s:match("^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)(%d%d)$")
   if y then
-    return os.time({
-      year = tonumber(y) --[[@as integer]],
-      month = tonumber(m) --[[@as integer]],
-      day = tonumber(d) --[[@as integer]],
-      hour = tonumber(H) --[[@as integer]],
-      min = tonumber(Mi) --[[@as integer]],
-      sec = tonumber(S) --[[@as integer]],
-    }),
-      nil
+    return validate_time(
+      s,
+      tonumber(y) --[[@as integer]],
+      tonumber(m) --[[@as integer]],
+      tonumber(d) --[[@as integer]],
+      tonumber(H) --[[@as integer]],
+      tonumber(Mi) --[[@as integer]],
+      tonumber(S) --[[@as integer]]
+    )
   end
 
   -- ISO-8601 or YYYY-MM-DD [HH:MM[:SS]]
   y, m, d, H, Mi, S = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)[T%s](%d%d):(%d%d):(%d%d)")
   if y then
-    return os.time({
-      year = tonumber(y) --[[@as integer]],
-      month = tonumber(m) --[[@as integer]],
-      day = tonumber(d) --[[@as integer]],
-      hour = tonumber(H) --[[@as integer]],
-      min = tonumber(Mi) --[[@as integer]],
-      sec = tonumber(S) --[[@as integer]],
-    }),
-      nil
+    return validate_time(
+      s,
+      tonumber(y) --[[@as integer]],
+      tonumber(m) --[[@as integer]],
+      tonumber(d) --[[@as integer]],
+      tonumber(H) --[[@as integer]],
+      tonumber(Mi) --[[@as integer]],
+      tonumber(S) --[[@as integer]]
+    )
   end
 
   y, m, d, H, Mi = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)[T%s](%d%d):(%d%d)")
   if y then
-    return os.time({
-      year = tonumber(y) --[[@as integer]],
-      month = tonumber(m) --[[@as integer]],
-      day = tonumber(d) --[[@as integer]],
-      hour = tonumber(H) --[[@as integer]],
-      min = tonumber(Mi) --[[@as integer]],
-      sec = 0,
-    }),
-      nil
+    return validate_time(
+      s,
+      tonumber(y) --[[@as integer]],
+      tonumber(m) --[[@as integer]],
+      tonumber(d) --[[@as integer]],
+      tonumber(H) --[[@as integer]],
+      tonumber(Mi) --[[@as integer]],
+      0
+    )
   end
 
   y, m, d = s:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
   if y then
     local cur = os.date("*t", now) --[[@as osdate]]
-    return os.time({
-      year = tonumber(y) --[[@as integer]],
-      month = tonumber(m) --[[@as integer]],
-      day = tonumber(d) --[[@as integer]],
-      hour = cur.hour,
-      min = cur.min,
-      sec = cur.sec,
-    }),
-      nil
+    return validate_time(
+      s,
+      tonumber(y) --[[@as integer]],
+      tonumber(m) --[[@as integer]],
+      tonumber(d) --[[@as integer]],
+      cur.hour,
+      cur.min,
+      cur.sec
+    )
   end
 
   return nil, "Could not parse date: " .. s

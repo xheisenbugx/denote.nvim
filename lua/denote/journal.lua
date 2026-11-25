@@ -24,7 +24,7 @@ local M = {}
 function M.directory()
   local jcfg = config.opts.journal or {}
   if jcfg.directory and jcfg.directory ~= "" then
-    return utils.normalize(jcfg.directory)
+    return config.directory(jcfg.directory)
   end
   return config.directory()
 end
@@ -218,7 +218,7 @@ function M.find_for_date(ts)
 end
 
 --- Create a new journal entry (`denote-journal-new-entry`).
----@param opts? { date?: string|integer, open?: boolean, save?: boolean, title?: string, extra_keywords?: string[] }
+---@param opts? { date?: string|integer, open?: boolean, save?: boolean, how?: string, title?: string, extra_keywords?: string[], interactive?: boolean, answers?: table<string, string> }
 ---@return table meta
 function M.new_entry(opts)
   opts = opts or {}
@@ -233,16 +233,31 @@ function M.new_entry(opts)
     kws[#kws + 1] = kw
   end
 
-  return create.create_sync({
-    dir = M.directory(),
-    title = opts.title or M.format_title(ts),
-    keywords = kws,
-    date = ts,
-    file_type = jcfg.file_type or config.opts.file_type,
-    template = jcfg.template,
-    open = opts.open,
-    save = opts.save,
-  })
+  local answers = vim.deepcopy(opts.answers or {})
+  local function build(resolved_answers)
+    return create.create_sync({
+      dir = M.directory(),
+      title = opts.title or M.format_title(ts),
+      keywords = kws,
+      date = ts,
+      file_type = jcfg.file_type or config.opts.file_type,
+      template = jcfg.template,
+      open = opts.open,
+      save = opts.save,
+      how = opts.how,
+      context = { answers = resolved_answers },
+    })
+  end
+
+  local named = jcfg.template and (config.opts.templates or {})[jcfg.template] or nil
+  if opts.interactive ~= false and type(named) == "string" then
+    local capture = require("denote.capture")
+    if #capture.prompts(named) > 0 then
+      return capture.ask({ named }, answers, build)
+    end
+  end
+
+  return build(answers)
 end
 
 --- Open the journal entry for the current period (see `journal.interval`) containing today
@@ -270,6 +285,7 @@ function M.new_or_existing_entry(opts)
     date = ts,
     open = opts.open,
     save = opts.save,
+    how = opts.how,
   })
   return meta.path, true
 end

@@ -17,6 +17,7 @@
 --- All dynamic block builders and insert/update commands also work standalone without `org.nvim`.
 
 local backlinks = require("denote.backlinks")
+local config = require("denote.config")
 local files = require("denote.files")
 local frontmatter = require("denote.frontmatter")
 local links = require("denote.links")
@@ -59,6 +60,7 @@ function M.dblock_links(params, ctx)
   local cur_path = (ctx and ctx.bufnr and vim.api.nvim_buf_is_valid(ctx.bufnr))
       and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr))
     or ""
+  local cur_real = cur_path ~= "" and config.canonicalize(cur_path) or ""
   local matched = files.list({
     denote_only = true,
     regexp = regexp,
@@ -66,7 +68,8 @@ function M.dblock_links(params, ctx)
     excluded_dirs_regexp = excluded_dirs,
   })
   matched = vim.tbl_filter(function(p)
-    return utils.normalize(p) ~= cur_path
+    local norm = utils.normalize(p)
+    return norm ~= cur_path and norm ~= cur_real
   end, matched)
   matched = sort.sort_files(matched, sort_by, reverse)
 
@@ -150,6 +153,7 @@ function M.dblock_files(params, ctx)
   local cur_path = (ctx and ctx.bufnr and vim.api.nvim_buf_is_valid(ctx.bufnr))
       and utils.normalize(vim.api.nvim_buf_get_name(ctx.bufnr))
     or ""
+  local cur_real = cur_path ~= "" and config.canonicalize(cur_path) or ""
   local matched = files.list({
     denote_only = true,
     text_only = true,
@@ -158,7 +162,8 @@ function M.dblock_files(params, ctx)
     excluded_dirs_regexp = excluded_dirs,
   })
   matched = vim.tbl_filter(function(p)
-    return utils.normalize(p) ~= cur_path
+    local norm = utils.normalize(p)
+    return norm ~= cur_path and norm ~= cur_real
   end, matched)
   matched = sort.sort_files(matched, sort_by, reverse)
 
@@ -185,6 +190,30 @@ function M.dblock_files(params, ctx)
   return out
 end
 
+---@param s string
+---@return string
+local function escape_html(s)
+  return (s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"))
+end
+
+---@param s string
+---@return string
+local function escape_latex(s)
+  local map = {
+    ["\\"] = "\\textbackslash{}",
+    ["{"] = "\\{",
+    ["}"] = "\\}",
+    ["$"] = "\\$",
+    ["&"] = "\\&",
+    ["%"] = "\\%",
+    ["#"] = "\\#",
+    ["_"] = "\\_",
+    ["^"] = "\\textasciicircum{}",
+    ["~"] = "\\textasciitilde{}",
+  }
+  return (s:gsub("[\\{}%$%%&_#^~]", map))
+end
+
 --- Export a `denote:` link for `org.nvim`'s export engine (`html`, `latex`, `beamer`, `markdown`, `gfm`, `ascii`, `org`).
 ---@param path string Link path after `denote:`
 ---@param desc string|nil
@@ -197,7 +226,7 @@ function M.export_link(path, desc, backend_name, info)
     return desc or path
   end
   local target_file = files.find_by_id(parsed.identifier)
-  local label = desc or (target_file and frontmatter.extract_title(target_file)) or parsed.identifier
+  local label = desc or (target_file and frontmatter.extract_title(target_file)) or parsed.identifier or path
   if not target_file then
     return label
   end
@@ -207,16 +236,23 @@ function M.export_link(path, desc, backend_name, info)
   local rel = base_dir and utils.relpath(target_file, base_dir) or vim.fn.fnamemodify(target_file, ":t")
   local stem = naming.split_extension(rel)
 
-  if backend_name == "html" then
-    local href = stem .. ".html"
-    if parsed.search and parsed.search:sub(1, 1) == "#" then
-      href = href .. parsed.search
+  local anchor = nil
+  if parsed.search and parsed.search ~= "" then
+    if parsed.search:sub(1, 1) == "#" then
+      anchor = parsed.search
+    elseif parsed.search:sub(1, 1) == "*" then
+      anchor = "#" .. naming.sluggify_title(parsed.search:sub(2))
     end
-    return string.format('<a href="%s">%s</a>', href, label)
+  end
+
+  if backend_name == "html" then
+    local href = stem .. ".html" .. (anchor or "")
+    return string.format('<a href="%s">%s</a>', escape_html(href), escape_html(label))
   elseif backend_name == "markdown" or backend_name == "gfm" then
-    return string.format("[%s](%s.md)", label, stem)
+    local href = stem .. ".md" .. (anchor or "")
+    return string.format("[%s](%s)", label, href)
   elseif backend_name == "latex" or backend_name == "beamer" then
-    return string.format("\\href{%s.pdf}{%s}", stem, label)
+    return string.format("\\href{%s.pdf}{%s}", stem, escape_latex(label))
   elseif backend_name == "ascii" then
     return label
   elseif backend_name == "org" then
@@ -333,16 +369,30 @@ local function parse_dblock_params(str)
     local c = str:sub(j, j)
     local val
     if c == '"' then
-      local close = str:find('"', j + 1, true)
-      if close then
-        val = str:sub(j + 1, close - 1)
-        i = close + 1
-      else
+      local buf = {}
+      local k = j + 1
+      local closed = false
+      while k <= n do
+        local ch = str:sub(k, k)
+        if ch == "\\" and k < n then
+          buf[#buf + 1] = str:sub(k + 1, k + 1)
+          k = k + 2
+        elseif ch == '"' then
+          closed = true
+          i = k + 1
+          break
+        else
+          buf[#buf + 1] = ch
+          k = k + 1
+        end
+      end
+      if not closed then
         break
       end
+      val = table.concat(buf)
     else
       local vs, ve = str:find("^[^%s]+", j)
-      if vs then
+      if vs and str:sub(vs, vs) ~= ":" then
         val = str:sub(vs, ve)
         i = ve + 1
         if val == "nil" then
@@ -352,6 +402,7 @@ local function parse_dblock_params(str)
         end
       else
         val = true
+        i = j
       end
     end
     params[key:lower()] = val
@@ -365,6 +416,9 @@ end
 ---@return integer updated_count
 function M.update_dblocks(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(bufnr) or not vim.bo[bufnr].modifiable then
+    return 0
+  end
   local writers = {
     ["denote-links"] = M.dblock_links,
     ["denote-backlinks"] = M.dblock_backlinks,

@@ -98,8 +98,22 @@ function M.sluggify_signature(str)
     return custom(str)
   end
   local s = vim.trim(str)
-  -- Preserve `=` while removing other punctuation
-  s = strip_chars(s, "[%[%]{}!@#$%%^&*()+%-'\"?,%.|;:~`‘’“”/\\<>]")
+  -- Preserve `=` while removing other excluded punctuation (plus `-`)
+  local pat = config.opts.excluded_punctuation_pattern
+  if pat and pat ~= "" then
+    s = s:gsub("[%z\1-\127\194-\244][\128-\191]*", function(c)
+      if c == "=" then
+        return nil
+      elseif c == "-" then
+        return ""
+      elseif #c == 1 then
+        return c:find(pat) and "" or nil
+      end
+      return pat:find(c, 1, true) and "" or nil
+    end)
+  else
+    s = s:gsub("%-", "")
+  end
   if not config.opts.preserve_case then
     s = downcase(s)
   end
@@ -170,8 +184,10 @@ function M.desluggify(component, str)
   end
   if component == "title" then
     local s = str:gsub("%-+", " ")
-    if #s > 0 then
-      s = s:sub(1, 1):upper() .. s:sub(2)
+    local first, rest = s:match("^([%z\1-\127\194-\244][\128-\191]*)(.*)$")
+    if first then
+      local up = vim.in_fast_event() and first:upper() or vim.fn.toupper(first)
+      s = up .. rest
     end
     return s
   elseif component == "signature" then
@@ -282,9 +298,8 @@ function M.parse_filename(path)
   for idx, tok in ipairs(tokens) do
     local d, v = tok.delim, tok.value
     if d == "@@" then
-      local id = v:match("^(" .. M.ID_PATTERN .. ")$")
-      if id then
-        result.identifier = id
+      if v ~= "" then
+        result.identifier = v
       end
     elseif d == nil and idx == 1 then
       local id = v:match("^(" .. M.ID_PATTERN .. ")$")
@@ -380,7 +395,8 @@ function M.format_filename(opts)
 
   for _, comp in ipairs(order) do
     if comp == "identifier" and id ~= "" then
-      if #parts == 0 and not config.opts.identifier_delimiter_always_present then
+      local is_ts = id:match("^" .. M.ID_PATTERN .. "$") ~= nil
+      if #parts == 0 and is_ts and not config.opts.identifier_delimiter_always_present then
         parts[#parts + 1] = id
       else
         parts[#parts + 1] = "@@" .. id

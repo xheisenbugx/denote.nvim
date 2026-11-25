@@ -81,15 +81,51 @@ function M.setup_global()
   end
 end
 
+--- Return true if `existing` (from `vim.fn.maparg`) is already one of our buffer-local Denote maps.
+---@param existing table|nil
+---@return boolean
+local function is_denote_map(existing)
+  return type(existing) == "table" and type(existing.desc) == "string" and existing.desc:sub(1, 8) == "Denote: "
+end
+
+--- Invoke a preserved mapping `prev`, or fall back to the raw key `lhs`.
+---@param lhs string
+---@param prev table|nil
+local function invoke_fallback(lhs, prev)
+  if prev and type(prev.callback) == "function" then
+    prev.callback()
+    return
+  end
+  if prev and type(prev.rhs) == "string" and prev.rhs ~= "" and prev.expr ~= 1 then
+    if prev.rhs:lower() ~= lhs:lower() then
+      local term = vim.api.nvim_replace_termcodes(prev.rhs, true, false, true)
+      vim.api.nvim_feedkeys(term, prev.noremap == 1 and "n" or "m", false)
+      return
+    end
+  end
+  local key = vim.api.nvim_replace_termcodes(lhs, true, false, true)
+  local count = vim.v.count > 0 and tostring(vim.v.count) or ""
+  vim.api.nvim_feedkeys(count .. key, "n", false)
+end
+
 --- Attach the buffer-local link preview keymap (default `K`). When the cursor is not on a
---- Denote link it falls back to LSP hover (if a client supports it) or the native key.
+--- Denote link it falls back to LSP hover (if a client supports it), any prior map, or native `K`.
 ---@param bufnr integer
 function M.attach_preview(bufnr)
   local m = config.opts.mappings
   if not m or not m.preview_link then
     return
   end
+  if vim.bo[bufnr].buftype ~= "" or vim.b[bufnr].denote_preview_path ~= nil then
+    return
+  end
   local lhs = m.preview_link
+  local existing = vim.api.nvim_buf_call(bufnr, function()
+    return vim.fn.maparg(lhs, "n", false, true)
+  end)
+  if is_denote_map(existing) then
+    return
+  end
   vim.keymap.set("n", lhs, function()
     if links.link_at_cursor(bufnr) then
       require("denote.preview").open()
@@ -109,18 +145,19 @@ function M.attach_preview(bufnr)
         return
       end
     end
-    local key = vim.api.nvim_replace_termcodes(lhs, true, false, true)
-    local count = vim.v.count > 0 and tostring(vim.v.count) or ""
-    vim.api.nvim_feedkeys(count .. key, "n", false)
+    invoke_fallback(lhs, existing)
   end, { buffer = bufnr, desc = "Denote: Preview linked note" })
 end
 
 --- Attach buffer-local link-following keymap to a Markdown / Org / Text buffer.
---- Carefully falls back to the native key behavior when cursor is NOT on a Denote link.
+--- Carefully falls back to any prior mapping or the native key behavior when cursor is NOT on a Denote link.
 ---@param bufnr integer
 function M.attach_buffer(bufnr)
   local m = config.opts.mappings
   if not m then
+    return
+  end
+  if vim.bo[bufnr].buftype ~= "" or vim.b[bufnr].denote_preview_path ~= nil then
     return
   end
   local ft = vim.bo[bufnr].filetype
@@ -137,15 +174,19 @@ function M.attach_buffer(bufnr)
   end
 
   local lhs = m.follow_link
+  local existing = vim.api.nvim_buf_call(bufnr, function()
+    return vim.fn.maparg(lhs, "n", false, true)
+  end)
+  if is_denote_map(existing) then
+    return
+  end
   vim.keymap.set("n", lhs, function()
     if links.link_at_cursor(bufnr) then
       links.follow_link()
       return
     end
     if m.follow_link_fallback ~= false then
-      local key = vim.api.nvim_replace_termcodes(lhs, true, false, true)
-      local count = vim.v.count > 0 and tostring(vim.v.count) or ""
-      vim.api.nvim_feedkeys(count .. key, "n", false)
+      invoke_fallback(lhs, existing)
     end
   end, { buffer = bufnr, desc = "Denote: Follow link at cursor" })
 end
@@ -157,18 +198,26 @@ local decorate_timers = {}
 function M.schedule_decorate(bufnr)
   local uv = vim.uv or vim.loop
   local delay = (config.opts.ui and config.opts.ui.debounce_ms) or 150
-  local timer = decorate_timers[bufnr] or assert(uv.new_timer())
-  decorate_timers[bufnr] = timer
-  timer:stop()
+  local prev = decorate_timers[bufnr]
+  if prev then
+    prev.timer:stop()
+    prev.timer:close()
+  end
+  local gen = (prev and prev.gen or 0) + 1
+  local timer = assert(uv.new_timer())
+  decorate_timers[bufnr] = { timer = timer, gen = gen }
   timer:start(
     delay,
     0,
     vim.schedule_wrap(function()
       timer:stop()
       timer:close()
-      decorate_timers[bufnr] = nil
-      if vim.api.nvim_buf_is_valid(bufnr) then
-        ui.decorate_buffer(bufnr)
+      local cur = decorate_timers[bufnr]
+      if cur and cur.gen == gen then
+        decorate_timers[bufnr] = nil
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          ui.decorate_buffer(bufnr)
+        end
       end
     end)
   )
@@ -189,7 +238,11 @@ function M.setup_autocmds()
     group = augroup,
     callback = function(ev)
       local bufnr = ev.buf
-      if not vim.api.nvim_buf_is_valid(bufnr) then
+      if
+        not vim.api.nvim_buf_is_valid(bufnr)
+        or vim.bo[bufnr].buftype ~= ""
+        or vim.b[bufnr].denote_preview_path ~= nil
+      then
         return
       end
       local ft = vim.bo[bufnr].filetype
@@ -210,7 +263,11 @@ function M.setup_autocmds()
     group = augroup,
     callback = function(ev)
       local bufnr = ev.buf
-      if not vim.api.nvim_buf_is_valid(bufnr) then
+      if
+        not vim.api.nvim_buf_is_valid(bufnr)
+        or vim.bo[bufnr].buftype ~= ""
+        or vim.b[bufnr].denote_preview_path ~= nil
+      then
         return
       end
       local ft = vim.bo[bufnr].filetype
@@ -220,9 +277,24 @@ function M.setup_autocmds()
     end,
   })
 
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    group = augroup,
+    callback = function(ev)
+      local entry = decorate_timers[ev.buf]
+      if entry then
+        entry.timer:stop()
+        entry.timer:close()
+        decorate_timers[ev.buf] = nil
+      end
+    end,
+  })
+
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = augroup,
     callback = function(ev)
+      if not vim.api.nvim_buf_is_valid(ev.buf) or vim.bo[ev.buf].buftype ~= "" then
+        return
+      end
       local path = vim.api.nvim_buf_get_name(ev.buf)
       if path ~= "" and naming.is_denote_file(path) then
         require("denote.files").touch()
@@ -234,7 +306,6 @@ function M.setup_autocmds()
       if rename.is_renaming(ev.buf) then
         return
       end
-      local path = vim.api.nvim_buf_get_name(ev.buf)
       if path ~= "" and naming.is_denote_file(path) then
         rename.rename_file_using_front_matter(path)
       end

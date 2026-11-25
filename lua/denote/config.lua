@@ -8,6 +8,8 @@ local M = {}
 ---@field date_format? string os.date format or special token ("org", "iso8601", "date")
 ---@field link_format? string Link template with %s placeholders (id, description)
 ---@field link_id_only_format? string ID-only link template with %s placeholder (id)
+---@field parse? fun(lines: string[]): denote.ParsedFrontMatter Optional front matter parser for custom file types
+---@field rewrite? fun(lines: string[], updates: table, opts?: table): string[], boolean Optional front matter rewriter for custom file types
 
 ---@class denote.JournalConfig
 ---@field directory? string|nil Directory for journal entries (nil -> <directory>/journal or <directory>)
@@ -20,7 +22,6 @@ local M = {}
 
 ---@class denote.SequenceConfig
 ---@field scheme "numeric"|"alphanumeric" Sequence signature scheme (default: "numeric")
----@field default_depth? integer Default depth for new sequences
 
 ---@class denote.MappingsConfig
 ---@field enabled boolean Register default global keymaps
@@ -89,6 +90,7 @@ M.defaults = {
   capture = {
     templates = {},
     specifiers = "%l\n%i\n%?",
+    picker = false,
   },
 
   --- Save newly created notes to disk immediately.
@@ -140,7 +142,7 @@ M.defaults = {
   --- Show context lines in the backlinks buffer by default.
   backlinks_show_context = true,
 
-  --- Split command for backlinks, explorer, and query result buffers.
+  --- Split command for backlinks and query result buffers (explorer opens in the current window).
   window_cmd = "botright 15split",
 
   --- Picker backend: "auto", "snacks", "fzf-lua", "telescope", "mini", "select".
@@ -148,6 +150,10 @@ M.defaults = {
 
   --- Silo directories (isolated Denote repositories).
   silos = {},
+
+  --- Automatically scope `config.directory()` to the silo containing the current buffer
+  --- when no explicit directory or `active_directory` is set.
+  silos_auto_detect = false,
 
   --- Journal configuration (`denote-journal`).
   journal = {
@@ -220,16 +226,25 @@ M.defaults = {
 ---@type denote.Config
 M.opts = vim.deepcopy(M.defaults)
 
+--- Base configuration prior to any silo-local `.denote.json` / `.denote.lua` overrides.
+---@type denote.Config
+M.base_opts = vim.deepcopy(M.defaults)
+
 --- Active silo override (nil means use `M.opts.directory`).
 ---@type string|nil
 M.active_directory = nil
+
+local uv = vim.uv or vim.loop
+local dir_memo = { tick = -1, map = {}, silo = {} }
 
 --- Merge user options into `M.opts`.
 ---@param user_opts? table
 ---@return denote.Config
 function M.setup(user_opts)
   M.opts = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), user_opts or {})
+  M.base_opts = vim.deepcopy(M.opts)
   M.active_directory = nil
+  dir_memo = { tick = -1, map = {}, silo = {} }
   -- Exclusion patterns and custom file types affect cached listings.
   local ok_files, files = pcall(require, "denote.files")
   if ok_files then
@@ -239,10 +254,12 @@ function M.setup(user_opts)
   if ok_fm and fm.clear_cache then
     fm.clear_cache()
   end
+  local ok_bl, bl = pcall(require, "denote.backlinks")
+  if ok_bl and bl.clear_cache then
+    bl.clear_cache()
+  end
   return M.opts
 end
-
-local uv = vim.uv or vim.loop
 
 --- Resolve symlinks in `path` (e.g. macOS `/var` -> `/private/var`) so that paths built from
 --- the Denote directory compare equal to buffer names, which Neovim stores resolved.
@@ -270,20 +287,38 @@ function M.canonicalize(path)
   end
 end
 
-local dir_memo = { tick = -1, map = {} }
-
 --- Return the currently active Denote directory (expanded and normalized).
 ---@param dir? string Optional explicit directory override
 ---@return string
 function M.directory(dir)
-  local raw = dir or M.active_directory or M.opts.directory
-  if type(raw) == "function" then
-    raw = raw()
-  end
   -- Memoize per event-loop iteration: hot loops (resolving many links) call this constantly.
   local tick = uv.now()
   if dir_memo.tick ~= tick then
-    dir_memo.tick, dir_memo.map = tick, {}
+    dir_memo.tick, dir_memo.map, dir_memo.silo = tick, {}, {}
+  end
+
+  local raw = dir or M.active_directory
+  if not raw and M.opts.silos_auto_detect then
+    local bufnr = vim.api.nvim_get_current_buf()
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buftype == "" then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name ~= "" then
+        local cached_silo = dir_memo.silo[name]
+        if cached_silo == nil then
+          local ok_silo, silo = pcall(require, "denote.silo")
+          local detected = ok_silo and silo.detect(name) or nil
+          cached_silo = detected or false
+          dir_memo.silo[name] = cached_silo
+        end
+        if cached_silo then
+          raw = cached_silo
+        end
+      end
+    end
+  end
+  raw = raw or M.opts.directory
+  if type(raw) == "function" then
+    raw = raw()
   end
   local hit = dir_memo.map[raw]
   if hit then

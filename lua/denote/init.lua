@@ -260,6 +260,7 @@ end
 M.journal_link_or_create_entry = function(...)
   return require("denote.journal").link_or_create_entry(...)
 end
+--- Same as |denote.calendar.open|.
 M.journal_calendar = function(...)
   return require("denote.calendar").open(...)
 end

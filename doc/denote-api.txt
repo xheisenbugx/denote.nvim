@@ -223,6 +223,7 @@ M.journal_link_or_create_entry()           *denote.journal_link_or_create_entry*
 
 
 M.journal_calendar()                                   *denote.journal_calendar*
+     Same as |denote.calendar.open|.
 
 
 M.sequence_new_parent()                             *denote.sequence_new_parent*
@@ -291,11 +292,13 @@ Configuration defaults and accessors                             *denote.config*
 denote.FileTypeSpec                                        *denote.FileTypeSpec*
 
     Fields: ~
-        {extension}             (string)                         File extension including leading dot (e.g. ".org", ".md")
-        {front_matter}          (string|fun(meta:table):string)  Front matter template or builder
-        {date_format?}          (string)                         os.date format or special token ("org", "iso8601", "date")
-        {link_format?}          (string)                         Link template with %s placeholders (id, description)
-        {link_id_only_format?}  (string)                         ID-only link template with %s placeholder (id)
+        {extension}             (string)                                                          File extension including leading dot (e.g. ".org", ".md")
+        {front_matter}          (string|fun(meta:table):string)                                   Front matter template or builder
+        {date_format?}          (string)                                                          os.date format or special token ("org", "iso8601", "date")
+        {link_format?}          (string)                                                          Link template with %s placeholders (id, description)
+        {link_id_only_format?}  (string)                                                          ID-only link template with %s placeholder (id)
+        {parse?}                (fun(lines:string[]):denote.ParsedFrontMatter)                    Optional front matter parser for custom file types
+        {rewrite?}              (fun(lines:string[],updates:table,opts?:table):string[],boolean)  Optional front matter rewriter for custom file types
 
 
 denote.JournalConfig                                      *denote.JournalConfig*
@@ -327,6 +330,13 @@ denote.Config                                                    *denote.Config*
 
 
 M.opts                                                      *denote.config.opts*
+
+    Type: ~
+        (denote.Config)
+
+
+M.base_opts                                            *denote.config.base_opts*
+     Base configuration prior to any silo-local `.denote.json` / `.denote.lua` overrides.
 
     Type: ~
         (denote.Config)
@@ -397,6 +407,7 @@ denote.CreateOpts                                            *denote.CreateOpts*
         {context?}         (denote.CaptureContext)        Capture context for template escapes (origin, region, answers)
         {_initial_title?}  (string)                       Internal: default text for the title prompt
         {_silo_dir?}       (string)                       Internal: create the note inside this silo
+        {_region_code?}    ({text:string,ft:string})      Internal: code region wrapped after file_type is resolved
 
 
 denote.RegionOpts : denote.CreateOpts                        *denote.RegionOpts*
@@ -505,10 +516,11 @@ denote.CaptureOrigin                                      *denote.CaptureOrigin*
 denote.CaptureContext                                    *denote.CaptureContext*
 
     Fields: ~
-        {origin?}   (denote.CaptureOrigin)  Where the capture was started from
-        {region?}   (string)                Text for `%i`
-        {answers?}  (table<string,string>)  Prompt answers keyed by prompt name (pre-supplied or collected)
-        {syntax?}   ()
+        {origin?}        (denote.CaptureOrigin)             Where the capture was started from
+        {region?}        (string)                           Text for `%i`
+        {answers?}       (table<string,string>)             Prompt answers keyed by prompt name (pre-supplied or collected)
+        {prompt_order?}  ({name:string,default?:string}[])  Prompt order shared across title/signature/body backreferences
+        {syntax?}        ()
 
 
 denote.CaptureTemplate                                  *denote.CaptureTemplate*
@@ -673,6 +685,17 @@ M.run({entry}, {ctx}, {opts?})                              *denote.capture.run*
         (any)  Created note meta / append result (when no prompt was needed)
 
 
+M.open_dispatch({list}, {on_pick})                *denote.capture.open_dispatch*
+     Open a single-key centered float for capture templates (like Org's capture dispatcher).
+
+    Parameters: ~
+        {list}     (denote.CaptureTemplate[])
+        {on_pick}  (fun(entry:denote.CaptureTemplate))
+
+    Returns: ~
+        (integer)  win
+
+
 denote.CaptureOpts                                          *denote.CaptureOpts*
 
     Fields: ~
@@ -799,7 +822,7 @@ M.new_entry({opts?})                                  *denote.journal.new_entry*
      Create a new journal entry (`denote-journal-new-entry`).
 
     Parameters: ~
-        {opts?}  ({date?:string|integer,open?:boolean,save?:boolean,title?:string,extra_keywords?:string[]})
+        {opts?}  ({date?:string|integer,open?:boolean,save?:boolean,how?:string,title?:string,extra_keywords?:string[],interactive?:boolean,answers?:table<string,string>})
 
     Returns: ~
         (table)  meta
@@ -1083,7 +1106,7 @@ M.link_or_create({opts?})                          *denote.links.link_or_create*
      (`denote-link-or-create`).
 
     Parameters: ~
-        {opts?}  ({id_only?:boolean,dir?:string})
+        {opts?}  ({id_only?:boolean,dir?:string,prompts?:string[]})
 
 
 M.link_after_creating({opts?})                *denote.links.link_after_creating*
@@ -1205,8 +1228,12 @@ M.find({identifier}, {opts?}, {on_done?})                *denote.backlinks.find*
         (denote.BacklinkMatch[]|denote.SearchHandle)
 
 
+M.clear_cache()                                   *denote.backlinks.clear_cache*
+     Clear the cached backlink presence indicators (`%b` statusline cache).
+
+
 M.has_backlinks({identifier}, {path?})          *denote.backlinks.has_backlinks*
-     Return true if any note links to `identifier`. The answer is cached per identifier and
+     Return true if any note links to `identifier`. The answer is cached per directory & identifier and
      refreshed asynchronously, so this is cheap enough to call from a statusline.
 
     Parameters: ~
@@ -1364,6 +1391,7 @@ denote.SearchSpec                                            *denote.SearchSpec*
         {pattern}  (string)                             Regex (or literal string with `fixed = true`)
         {files}    (string[])                           Candidate files (only matches inside these are returned)
         {fixed?}   (boolean)                            Treat `pattern` as a literal string
+        {word?}    (boolean)                            Require word boundaries around matches
         {case?}    ("smart"|"sensitive"|"insensitive")  Default "smart"
         {root?}    (string)                             Directory to hand to `rg` when there are many candidates
 
@@ -1470,11 +1498,11 @@ M.unlinked_mentions({opts?}, {on_done?})       *denote.report.unlinked_mentions*
 
 
 M.link_mention({target?})                           *denote.report.link_mention*
-     Replace the first mention of the last `unlinked_mentions` target on the current line with
-     a `denote:` link (description keeps the text exactly as written).
+     Replace the first unlinked mention of the last `unlinked_mentions` target on the current line
+     with a `denote:` link (description keeps the text exactly as written).
 
     Parameters: ~
-        {target?}  ({identifier:string,title:string})
+        {target?}  ({identifier:string,title:string,path?:string})
 
     Returns: ~
         (boolean)
@@ -1492,7 +1520,7 @@ M.check({opts?}, {on_done?})                               *denote.report.check*
      Without `on_done` returns the report directly; with it, runs asynchronously.
 
     Parameters: ~
-        {opts?}     ({quickfix?:boolean,orphans?:boolean})
+        {opts?}     ({quickfix?:boolean,orphans?:boolean,sync?:boolean})
         {on_done?}  (fun(report:denote.CheckReport))
 
     Returns: ~
@@ -1809,6 +1837,13 @@ M.parse_file({path})                             *denote.frontmatter.parse_file*
 
 M.clear_cache()                                 *denote.frontmatter.clear_cache*
      Clear the front matter title cache.
+
+
+M.evict_cache({path})                           *denote.frontmatter.evict_cache*
+     Evict a single path from the front matter title cache.
+
+    Parameters: ~
+        {path}  (string)
 
 
 M.extract_title({path})                       *denote.frontmatter.extract_title*
@@ -2358,12 +2393,18 @@ M.new_child({opts?})                                 *denote.sequence.new_child*
     Parameters: ~
         {opts?}  (denote.SequenceCreateOpts)
 
+    Returns: ~
+        (table|nil)
+
 
 M.new_sibling({opts?})                             *denote.sequence.new_sibling*
      Create a sibling sequence note (`denote-sequence-new-sibling`).
 
     Parameters: ~
         {opts?}  (denote.SequenceCreateOpts)
+
+    Returns: ~
+        (table|nil)
 
 
 M.find({opts?})                                           *denote.sequence.find*
@@ -2390,9 +2431,10 @@ M.link({opts?})                                           *denote.sequence.link*
 
 M.reparent({opts?})                                   *denote.sequence.reparent*
      Reparent the current note under a chosen parent sequence (`denote-sequence-reparent`).
+     When `recursive` is true (or confirmed interactively), descendants are also renumbered.
 
     Parameters: ~
-        {opts?}  ({file?:string,parent_signature?:string,dir?:string})
+        {opts?}  ({file?:string,parent_signature?:string,dir?:string,recursive?:boolean})
 
 
 ==============================================================================
@@ -2435,7 +2477,8 @@ M.with_silo({silo_dir}, {fn})                            *denote.silo.with_silo*
 
 
 M.switch({silo_dir?})                                       *denote.silo.switch*
-     Switch the active Denote directory for this session.
+     Switch the active Denote directory for this session (applying any `.denote.json` / trusted
+     `.denote.lua` overrides on top of the base configuration).
 
     Parameters: ~
         {silo_dir?}  (string)  Pass nil to reset to default `config.opts.directory`
